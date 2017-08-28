@@ -138,7 +138,6 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="02600") varname="urban"; * urban/rural classification;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="05600") varname="teach"; *teaching dummy;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="08000") varname="ltch"; * dummy for LTCH;
-                when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="08100") varname="ltch_part"; * dummy for LTCH co-located within another hospital;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="10500") varname="cah"; * dummy for CAH;
 
                 *malpractice;
