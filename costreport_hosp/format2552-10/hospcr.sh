@@ -21,22 +21,21 @@ sas -nodms -noterminal extract_hosp_alpha.sas
 # Transpose to wide shape (multiple variables per report number) & merge alphanumeric & numeric data to create Hospital-level data
 sas -nodms -noterminal crhospcr.sas
 
-# Create hospital panel data for each calendar year
+# # Create hospital panel data for each calendar year
 stata-se -q -b do crhospcr_panel.do
-
-# Delete intermediate data files
+#
+# # For hospital-CY, get vertical integration measures: dummy for VI, mix of PACs if VI=1, # providers per PAC type
+stata-se -q -b do hospvi_measure.do
+#
+# # Delete intermediate data files
 cd /home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport
-rm -f hosp_rpt2552_10_*.csv
-rm -f hosp_nmrc2552_10_*.csv
-rm -f hosp_alpha2552_10_*.csv
-rm -f hosp_rpt2552_10_*.sas7bdat
-rm -f hosp_nmrc2552_10_*.sas7bdat
-rm -f hosp_alpha2552_10_*.sas7bdat
-rm -f hosp_alpha201?_long.sas7bdat
-rm -f hosp_nmrc_rpt201?_long.sas7bdat
+rm -f *.csv
+rm -f *.sas7bdat
 
 cd /home/hcmg/kunhee/Labor/Bayada_data
 rm -f alpha*.sas7bdat
 rm -f nmrc*.sas7bdat
 rm -f hospcr201?.sas7bdat
-gzip hospcr201?.dta
+mv hospcr2011.dta hospcr2011_255210.dta
+# gzip hospcr201?.dta
+# gzip hospcr2011_255210.dta
