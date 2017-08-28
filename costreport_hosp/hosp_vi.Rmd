@@ -1,0 +1,75 @@
+---
+title: "Vertical integration trend"
+author: "Lucy Kim"
+date: "8/23/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list=ls())
+
+source("/Users/kunheekim/Dropbox/Wharton/Research/Labor/code/summarySE.R")
+require(devtools)
+require(digest)
+library(plyr)
+library(ggplot2)
+library(lubridate)
+require(Hmisc)
+library(pastecs)
+library(zoo) # date
+library(plm)
+library(gplots)
+library(apsrtable)
+library("reshape2")
+library(readr)
+library(reshape)
+library(gtable)
+library(grid)
+library(data.table)
+
+theme_set(theme_bw(base_size=12))
+```
+
+## Load data
+```{r}
+df <- read.csv("/Users/kunheekim/Dropbox/Research/VI/vertical-integration/costreport_hosp/hosp_vi.csv")
+
+```
+
+## % hospitals VI with each type, by CY
+mean across all hospital-years
+```{r}
+vipct <- ddply(df, .(pac), summarise, M=100*mean(vi, na.rm=TRUE))
+arrange(vipct, desc(M)) 
+```
+
+plot the trend
+```{r}
+df2 <- subset(df, pac=="hha" | pac=="hospice" | pac=="irf" | pac=="snf" )
+
+#reorder categories
+df2$pac4 <- factor(df2$pac, levels=c("hha", "irf", "snf", "hospice"), labels=c("HHA", "IRF", "SNF", "Hospice"))
+
+df3 <- ddply(df2, .(pac4, cy), summarise, vi=100*mean(vi, na.rm=TRUE))
+
+ggplot(df3, aes(x=factor(cy), y=vi, colour=pac4, group=pac4)) +
+  geom_point() +
+  geom_line() +
+  labs(title="Percent of hospitals vertically integrated with post-acute care (PAC)", 
+        x="Year",
+        y="Percent",
+        colour="PAC",
+        caption="Note: Sample of general short-term hospitals") +
+    theme_bw(base_size = 13) +
+  theme(legend.position="bottom") +
+        guides(fill=guide_legend(nrow=1, byrow=TRUE))   ggsave("/Users/kunheekim/Dropbox/Research/VI/gph/vitrend.pdf", width=20, height=10, units="cm")  
+
+
+```
+
+
+
+
+

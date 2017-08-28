@@ -1,6 +1,5 @@
 options nocenter ;
-*by Kunhee Kim, kunhee@wharton.upenn.edu, 2015-03-11 ;
-*Download & unzip the CMS HRIS hospital cost report data for 2011-2015;
+*Download & unzip the CMS HRIS hospital cost report data for each year;
 
 %macro downloadhospcr(firstyr, lastyr);
 %do year = &firstyr. %to &lastyr.;

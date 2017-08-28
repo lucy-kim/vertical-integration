@@ -19,11 +19,11 @@ lab define provtype 1 "general short-term" 2 "general long-term" 3 "cancer" 4 "p
 foreach f in "hosp" "ipf" "swbsnf" "swbnf" "rhc" "snf" "hha" "hospice" "nf" "irf" "renal" "cmhc" "fqhc" "asc" {
   *convert date variable to Stata date
   loc v `f'_dtcert
-  split `v', destring parse(/)
-  gen a = mdy(`v'1, `v'2, `v'3)
-  drop `v'*
-  rename a `v'
-  format `v' %d
+  capture split `v', destring parse(/)
+  capture gen a = mdy(`v'1, `v'2, `v'3)
+  capture drop `v'*
+  capture rename a `v'
+  capture format `v' %d
 
   capture lab var `f'_name "`f' name"
   capture lab var `f'_ccn "`f' CMS provider ID"
@@ -41,7 +41,7 @@ foreach v of varlist cr_start cr_end {
   format `v' %d
 }
 
-foreach v of varlist teaching ltch cah req_malprins dissh uncomp1 uncomp2 {
+foreach v of varlist teaching ltch ltch_part cah req_malprins dissh uncomp1 uncomp2 {
   tab `v'
   assert `v'=="Y" | `v'=="N" | `v'==""
 
@@ -53,6 +53,7 @@ foreach v of varlist teaching ltch cah req_malprins dissh uncomp1 uncomp2 {
 }
 lab var uncomp1 "=1 if receive uncompensated care payment before 10/1 during the cost reporting period"
 lab var uncomp2 "=1 if receive uncompensated care payment on/after 10/1 during the cost report period"
+lab var ltch_part "=1 if ltch co-located within another hospital during the CR period"
 
 loc v urban
 tab `v'
@@ -84,13 +85,14 @@ drop malprins_liablim* fy_end_dt fy_bgn_dt
 *drop unnecessary vars
 drop adr_vndr_cd fi_num trnsmtl_num rpt_stus_cd
 
-*drop obs with missing values in the cost reporting period
-drop if cr_start==.
-
 drop if state=="PR" | state=="MP" | state=="GU" | state=="VI"
 
 *even if there are duplicates per prov_num-FY, it seems to cover different CR periods (see cr_start, cr_end vars), so don't worry
 drop dup
+
+*drop obs with missing values in the cost reporting period
+drop if cr_start==.
+
 
 compress
 save hospcr_panel, replace
