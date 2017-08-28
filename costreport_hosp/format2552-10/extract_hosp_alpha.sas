@@ -42,19 +42,16 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
                 when (WKSHT_CD="S200001" and CLMN_NUM="0010" and LINE_NUM="00300") varname="hosp_name"; * hosp name;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0020" and LINE_NUM="00300") varname="hosp_ccn"; * hosp CCN number;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0030" and LINE_NUM="00300") varname="hosp_cbsa"; * hosp BSA number;
-                when (WKSHT_CD="S200001" and CLMN_NUM="0040" and LINE_NUM="00300") varname="hosp_provtype"; * hosp provider type;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0050" and LINE_NUM="00300") varname="hosp_dtcert"; * hosp date certified;
 
                 when (WKSHT_CD="S200001" and CLMN_NUM="0010" and LINE_NUM="00400") varname="ipf_name"; * ipf name;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0020" and LINE_NUM="00400") varname="ipf_ccn"; * ipf CCN number;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0030" and LINE_NUM="00400") varname="ipf_cbsa"; * ipf BSA number;
-                when (WKSHT_CD="S200001" and CLMN_NUM="0040" and LINE_NUM="00400") varname="ipf_provtype"; * ipf provider type;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0050" and LINE_NUM="00400") varname="ipf_dtcert"; * ipf date certified;
 
                 when (WKSHT_CD="S200001" and CLMN_NUM="0010" and LINE_NUM="00500") varname="irf_name"; * irf name;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0020" and LINE_NUM="00500") varname="irf_ccn"; * irf CCN number;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0030" and LINE_NUM="00500") varname="irf_cbsa"; * irf BSA number;
-                when (WKSHT_CD="S200001" and CLMN_NUM="0040" and LINE_NUM="00500") varname="irf_provtype"; * irf provider type;
                 when (WKSHT_CD="S200001" and CLMN_NUM="0050" and LINE_NUM="00500") varname="irf_dtcert"; * irf date certified;
 
                 when (WKSHT_CD="S200001" and CLMN_NUM="0010" and LINE_NUM="00700") varname="swbsnf_name"; * swbsnf name;
@@ -143,10 +140,6 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
 
                 *malpractice;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="11700") varname="req_malprins"; * dummy for being legally required to carry malpractice insurance;
-                when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="11800") varname="malprins_policy"; * is malpractice insurance claims-made or occurrence policy;
-                when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="11801") varname="malprins_premium"; * malpractice insurance premiums;
-                when (WKSHT_CD EQ "S200001" and CLMN_NUM="0020" and LINE_NUM="11801") varname="malprins_paidloss"; * malpractice insurance paid losses;
-                when (WKSHT_CD EQ "S200001" and CLMN_NUM="0030" and LINE_NUM="11801") varname="malprins_selfins"; * malpractice insurance self insurance;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="11900") varname="malprins_liablim1"; * malpractice insurance liability limit per lawsuit;
                 when (WKSHT_CD EQ "S200001" and CLMN_NUM="0020" and LINE_NUM="11900") varname="malprins_liablim2"; * malpractice insurance liability limit per policy year;
 
