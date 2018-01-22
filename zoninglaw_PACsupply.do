@@ -110,59 +110,6 @@ save `zip_zcta'
 * get the number of SNFs, HHAs, and other types of PAC facilities in each state-year from POS data
 use `home'/data/POS/pos2016, clear
 
-/*keep if prvdr_ctgry_cd=="02" | prvdr_ctgry_cd=="03" | prvdr_ctgry_cd=="04" | prvdr_ctgry_cd=="05" | prvdr_ctgry_cd=="06" | prvdr_ctgry_cd=="10"*/
-
-* provider-level data on number of beds within entity
-keep sbunit_cnt prvdr_num fac_name gnrl_fac_type gnrl_cntl_typ brnch_cnt city_name zip_cd crtfd_bed_cnt bed_cnt mdcd_nf_bed_cnt mdcr_snf_bed_ mdcr_mdcd_snf state_cd prvdr_ctgry_cd pgm_prtcptn_cd zip_cd
-
-drop if state_cd=="PR" | state_cd=="AS" | state_cd=="GU" | state_cd=="AK" | state_cd=="HI" | state_cd=="MP" | state_cd=="VI" | state_cd=="AK" | state_cd=="DC"
-
-*merge with ZIP to ZCTA xwalk
-merge m:1 zip_cd using `zip_zcta', keep(3) nogen
-*1000 unmatched and had _m=1
-
-*merge with ZCTA-level zoning regulation data
-merge m:1 zcta5 using `ziplvl_idx', keep(1 3)
-* 50% of obs have zcta5 unmatched to the zoning index data - a lot!!
-
-*count number of unmatched ZCTAs in each state
-bys state_cd: egen unmatch = sum(_m==1)
-bys state_cd: egen totzcta = sum(1)
-preserve
-keep state_cd unmatch totzcta
-duplicates drop
-gen pct_unmatched = 100*unmatch / totzcta
-restore
-
-*drop ZCTAs that are not matched to the zoning law data
-drop if _m==1
-drop _me
-
-rename state_cd statename
-
-* US territories + DC not matched
-
-*merge with state-level CON status data
-preserve
-insheet using `home'/data/CONs_state.csv, names clear
-drop note
-drop if state==""
-
-keep state* con*
-save `home'/data/con_state_hha_nh, replace
-restore
-
-rename statename state_ab
-merge m:1 state_ab using `home'/data/con_state_hha_nh, keep(3) nogen
-
-* merge with CR data - only a half of providers are matched because we dropped a half of ZCTAs with no zoning regulation data
-
-* get the HHA cost report data on the volume of care provided
-merge 1:1 prvdr_num using `home'/data/HCRIS/hhacr_panel, keep(1 3) nogen
-
-* get the SNF cost report data on the volume of care provided
-merge 1:1 prvdr_num using `home'/data/HCRIS/snfcr_panel, keep(1 3) nogen
-
 * drop hospital, portable x-ray supplier, ESRD facility, ASC, hospice, organ procurement org
 destring prvdr_ctgry_cd, replace
 drop if prvdr_ctgry_cd==1 | prvdr_ctgry_cd==7 | prvdr_ctgry_cd==9 | prvdr_ctgry_cd==15 | prvdr_ctgry_cd==16 | prvdr_ctgry_cd==17
@@ -177,6 +124,70 @@ tab cat
 lab def provcode 1 "Nursing home" 2 "HHA" 6 "Psych" 8 "Therapy" 11 "ICF/MR" 12 "RHC" 14 "CORF" 19 "CMHC" 21 "FQHC", replace
 lab val cat provcode
 
+keep if cat==1 | cat==2
+
+keep sbunit_cnt prvdr_num fac_name gnrl_fac_type gnrl_cntl_typ brnch_cnt city_name zip_cd crtfd_bed_cnt bed_cnt mdcd_nf_bed_cnt mdcr_snf_bed_ mdcr_mdcd_snf state_cd prvdr_ctgry_cd pgm_prtcptn_cd zip_cd cat
+
+drop if state_cd=="PR" | state_cd=="AS" | state_cd=="GU" | state_cd=="AK" | state_cd=="HI" | state_cd=="MP" | state_cd=="VI" | state_cd=="AK" | state_cd=="DC"
+
+*merge with ZIP to ZCTA xwalk
+merge m:1 zip_cd using `zip_zcta', keep(3) nogen
+*1000 unmatched and had _m=1
+
+*merge with ZCTA-level zoning regulation data
+merge m:1 zcta5 using `ziplvl_idx', keep(1 3)
+* 50% of obs have zcta5 unmatched to the zoning index data - a lot!!
+
+preserve
+*count number of unmatched ZCTAs in each state
+bys state_cd: egen unmatch = sum(_m==1)
+bys state_cd: egen totzcta = sum(1)
+keep state_cd unmatch totzcta
+duplicates drop
+gen pct_unmatched = 100*unmatch / totzcta
+restore
+
+*drop ZCTAs that are not matched to the zoning law data
+gen unmatched = _m==1
+tab unmatched
+/*drop if _m==1*/
+drop _me
+
+*drop 240 NHs if # certified beds = 0
+drop if cat==1 & crtfd_bed_==0
+
+rename state_cd statename
+
+* US territories + DC not matched
+
+*merge with state-level CON status data
+preserve
+insheet using `home'/data/CONs_state.csv, names clear
+drop note
+drop if state==""
+
+keep state* con* product
+save `home'/data/con_state_hha_nh, replace
+restore
+
+rename statename state_ab
+merge m:1 state_ab using `home'/data/con_state_hha_nh, keep(3) nogen
+
+* merge with CR data - only a half of providers are matched because we dropped a half of ZCTAs with no zoning regulation data
+
+* get the HHA cost report data on the volume of care provided
+merge 1:1 prvdr_num using `home'/data/HCRIS/hhacr_panel, keep(1 3) nogen
+
+* get the SNF cost report data on the volume of care provided
+merge 1:1 prvdr_num using `home'/data/HCRIS/snfcr_panel, keep(1 3) nogen
+
+gen nh_nbeds = crtfd_bed_cnt if cat==1
+
+foreach vv in "days_tot" "disch_tot" "admit_tot" {
+  egen nh_`vv' =  rowtotal(snf_`vv' nf_`vv')
+  replace nh_`vv' = . if snf_`vv'==. & nf_`vv'==.
+}
+
 * create a single CON status indicator
 gen con = con_hha if cat==2
 replace con = con_nh if cat==1
@@ -188,7 +199,23 @@ label var WRLURI "Restrictive zoning law"
 label var con "CON"
 label var WRLURI_X_con "Restrictive zoning law X CON"
 
-*import state-level total number of Medicare beneficiaries by state for CY 2015 (downloaded from https://www.kff.org/medicare/state-indicator/total-medicare-beneficiaries/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D)
+* create ownership type category separately for HHAs & SNFs
+destring gnrl_cntl_typ, replace
+*HHA
+gen nfp = gnrl_cntl_typ >=1 & gnrl_cntl_typ <=3 if cat==2
+gen fp = gnrl_cntl_typ==4 if cat==2
+gen gov = gnrl_cntl_typ >=5 if cat==2
+
+*SNF
+replace fp = (gnrl_cntl_typ >=1 & gnrl_cntl_typ <=3) | gnrl_cntl_typ==13 if cat==1
+replace nfp = gnrl_cntl_typ >=4 & gnrl_cntl_typ <=6 if cat==1
+replace gov = gnrl_cntl_typ >=7 & gnrl_cntl_typ <=12 if cat==1
+
+foreach t in "fp" "nfp" "gov" {
+  assert `t'!=.
+}
+
+/**import state-level total number of Medicare beneficiaries by state for CY 2015 (downloaded from https://www.kff.org/medicare/state-indicator/total-medicare-beneficiaries/?currentTimeframe=0&sortModel=%7B%22colId%22:%22Location%22,%22sort%22:%22asc%22%7D)
 preserve
 insheet using `home'/data/mcre_benes_bystate2015.csv, comma names clear
 drop in 1/3
@@ -202,11 +229,10 @@ restore
 
 merge m:1 state using `mcre_cnt', keep(1 3) nogen
 drop state
-destring mcre_cnt, replace
+destring mcre_cnt, replace*/
 
 *lump variables for SNF & NF
-gen unmatched = snf_nbeds==. & nf_nbeds==.
-foreach vv in "nbeds" "days_tot" "disch_tot" "admit_tot" {
+foreach vv in "days_tot" "disch_tot" "admit_tot" {
   replace snf_`vv' = 0 if unmatched==0 & snf_`vv'==.
   replace nf_`vv' = 0 if unmatched==0 & nf_`vv'==.
   gen nh_`vv' = snf_`vv' + nf_`vv'
@@ -242,11 +268,18 @@ foreach x in "nh" "hha" {
     replace `y' = (`y' / mcre_cnt)*100000
   }
 }*/
+
 *--------------------------
 * ZCTA-level data on number of providers
 use `provdata', clear
 gen i = 1
-collapse (sum) num=i , by(cat state_ab con* zcta WRLURI* totpop pct_* *income ln*)
+collapse (sum) num=i nh_nbeds nh_days_tot nh_disch_tot nh_admit_tot hha_snv hha_patcnt, by(cat state_ab con* zcta unmatched WRLURI* totpop pct_* *income ln*)
+
+*drop 2 zctas referring to 2 different states
+drop if zcta==72761 | zcta==75501
+duplicates tag cat zcta, gen(dup)
+assert dup==0
+drop dup
 
 sort zcta cat
 
@@ -263,6 +296,138 @@ merge m:1 zcta using `abovemedian', nogen
 tempfile zctadata
 save `zctadata'
 
+*--------------------------
+*are the unmatched ZIP codes very different from matched ZIP codes?
+use `zctadata', clear
+* summ stats of total for ZCTA
+bys cat unmatched: sum num nh_nbeds nh_days_tot nh_disch_tot hha_snv hha_patcnt
+
+*summ stats for average per agency in ZCTA
+use `provdata', clear
+gen i = 1
+collapse (mean) nh_nbeds nh_days_tot nh_disch_tot nh_admit_tot hha_snv hha_patcnt, by(cat state_ab con* zcta unmatched WRLURI* totpop pct_* *income ln*)
+bys cat unmatched: sum nh_nbeds nh_days_tot nh_disch_tot hha_snv hha_patcnt
+
+
+*-----------------
+* By non-CON, CON-NH only, CON-NH & CON-HHA states, get summary statistics
+
+*nursing home
+use `zctadata', clear
+des con*
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus: sum num nh_nbeds nh_days_tot nh_disch_tot if unmatched==0 & cat==1
+bys constatus: sum num nh_nbeds nh_days_tot nh_disch_tot if cat==1
+
+use `provdata', clear
+/*collapse (mean) nh_nbeds nh_days_tot nh_disch_tot nh_admit_tot hha_snv hha_patcnt, by(cat state_ab con* unmatched prvdr_num zcta)*/
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus: sum nh_nbeds nh_days_tot nh_disch_tot if unmatched==0 & cat==1
+bys constatus: sum nh_nbeds nh_days_tot nh_disch_tot if cat==1
+
+*HHA
+use `zctadata', clear
+des con*
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus: sum num hha_snv hha_patcnt if unmatched==0 & cat==2
+bys constatus: sum num hha_snv hha_patcnt if cat==2
+
+use `provdata', clear
+/*collapse (mean) hha_snv hha_patcnt, by(cat state_ab con* unmatched prvdr_num zcta)*/
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus: sum hha_snv hha_patcnt if unmatched==0 & cat==2
+bys constatus: sum hha_snv hha_patcnt if cat==2
+
+*-----------------
+* By above/below median zoning regulation X non-CON, CON-NH only, CON-NH & CON-HHA states, get summary statistics
+
+*nursing home
+use `zctadata', clear
+des con*
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus gp: sum WRLURI num nh_nbeds nh_days_tot nh_disch_tot if unmatched==0 & cat==1 & gp!=.
+bys constatus gp: sum WRLURI num nh_nbeds nh_days_tot nh_disch_tot if cat==1 & gp!=.
+
+use `provdata', clear
+/*collapse (mean) nh_nbeds nh_days_tot nh_disch_tot nh_admit_tot hha_snv hha_patcnt, by(cat state_ab con* unmatched prvdr_num zcta)*/
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+merge m:1 zcta using `abovemedian', nogen
+
+bys constatus gp: sum nh_nbeds nh_days_tot nh_disch_tot if unmatched==0 & cat==1 & gp!=.
+bys constatus gp: sum nh_nbeds nh_days_tot nh_disch_tot if cat==1 & gp!=.
+
+*HHA
+use `zctadata', clear
+des con*
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+bys constatus gp: sum num hha_snv hha_patcnt if unmatched==0 & cat==2 & gp!=.
+bys constatus gp: sum num hha_snv hha_patcnt if cat==2 & gp!=.
+
+use `provdata', clear
+/*collapse (mean) hha_snv hha_patcnt nh_admit_tot hha_snv hha_patcnt, by(cat state_ab con* unmatched prvdr_num zcta)*/
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+merge m:1 zcta using `abovemedian', nogen
+
+bys constatus gp: sum hha_snv hha_patcnt if unmatched==0 & cat==2 & gp!=.
+bys constatus gp: sum hha_snv hha_patcnt if cat==2 & gp!=.
+
+
 *-----------------
 * provider level
 use `provdata', clear
@@ -270,13 +435,12 @@ use `provdata', clear
 merge m:1 zcta using `abovemedian', nogen
 
 * exclude outlier?
-keep if cat==1 | cat==2
 tab nh_disch if cat==1
 drop if nh_disch > 10000 & cat==1
 tab hha_patcnt if cat==2
-drop if hha_patcnt > 10000 & cat==2
+drop if hha_patcnt > 100000 & cat==2
 tab hha_snv if cat==2
-drop if hha_snv > 100000 & cat==2
+drop if hha_snv > 1000000 & cat==2
 
 loc y_nh_nbeds "Number of NH beds"
 loc y_nh_days_tot "Number of NH days"
@@ -290,35 +454,75 @@ loc hha_i = 2
 loc y_nh "Nursing homes"
 loc y_hha "HHAs"
 
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+loc indep lntotpop pct_pop_gt65 lnmedfamincome pct_white pct_black pct_asian pct_ins*
+
 loc file zoning2
 capture erase `reg'/`file'.xls
 capture erase `reg'/`file'.txt
 capture erase `reg'/`file'.tex
 loc out "outreg2 using `reg'/`file'.xls, tex append label"
 
-loc indep lntotpop pct_pop_gt65 lnmedfamincome pct_white pct_black pct_asian pct_ins*
-
 areg hha_patcnt WRLURI `indep' if cat==2 & con==0, absorb(state_ab)
+
+drop nh_admit_tot
 
 foreach x in "nh" "hha" {
   foreach y of varlist `x'* {
     di "`y'"
-    areg `y' WRLURI `indep' if cat==``x'_i', absorb(state_ab)
+    areg `y' WRLURI `indep' if cat==``x'_i' & constatus==1, absorb(state_ab)
     sum `y' if e(sample)
     loc mdv: display %9.2f `r(mean)'
     `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
 
-    areg `y' WRLURI `indep' if cat==``x'_i' & con==1, absorb(state_ab)
+    areg `y' WRLURI `indep' if cat==``x'_i' & constatus==2, absorb(state_ab)
     sum `y' if e(sample)
     loc mdv: display %9.2f `r(mean)'
     `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
 
-    areg `y' WRLURI `indep' if cat==``x'_i' & con==0, absorb(state_ab)
+    areg `y' WRLURI `indep' if cat==``x'_i' & constatus==3, absorb(state_ab)
     sum `y' if e(sample)
     loc mdv: display %9.2f `r(mean)'
     `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
   }
 }
+
+loc file zoning3
+capture erase `reg'/`file'.xls
+capture erase `reg'/`file'.txt
+capture erase `reg'/`file'.tex
+loc out "outreg2 using `reg'/`file'.xls, tex append label"
+
+*by ownership
+foreach t in "fp" "nfp" "gov" {
+  foreach x in "nh" {
+    foreach y of varlist `x'* {
+      di "`y'"
+      areg `y' WRLURI `indep' if cat==``x'_i' & constatus==1 & `t'==1, absorb(state_ab)
+      sum `y' if e(sample)
+      loc mdv: display %9.2f `r(mean)'
+      `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+      areg `y' WRLURI `indep' if cat==``x'_i' & constatus==2 & `t'==1, absorb(state_ab)
+      sum `y' if e(sample)
+      loc mdv: display %9.2f `r(mean)'
+      `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+      areg `y' WRLURI `indep' if cat==``x'_i' & constatus==3 & `t'==1, absorb(state_ab)
+      sum `y' if e(sample)
+      loc mdv: display %9.2f `r(mean)'
+      `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+    }
+  }
+}
+
+
 
 *summary stats for 2 X 2 groupings: restrictive vs CON
 foreach x in "nh" "hha" {
@@ -359,6 +563,7 @@ tempfile hhi
 save `hhi'
 *-------------------------
 * ZCTA-level analysis: impact of zoning law & CON law on # providers
+
 use `zctadata', clear
 
 *drop ZCTAs that span across states
@@ -380,6 +585,12 @@ merge 1:1 zcta cat using `hhi' , keep(1 3) nogen
 bys con: sum num_per if cat==1
 bys con: sum num_per if cat==2*/
 
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
 
 loc file zoning
 capture erase `reg'/`file'.xls
@@ -389,37 +600,161 @@ loc out "outreg2 using `reg'/`file'.xls, tex append label"
 
 *run regression on # providers & HHI
 foreach x in "nh" "hha" {
-  areg num WRLURI `indep' if cat==``x'_i', absorb(state_ab)
+  areg num WRLURI `indep' if cat==``x'_i' & constatus==1, absorb(state_ab)
   sum num if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
 
-  areg num WRLURI `indep' if cat==``x'_i' & con==1, absorb(state_ab)
+  areg num WRLURI `indep' if cat==``x'_i' & constatus==2, absorb(state_ab)
   sum num if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
 
-  areg num WRLURI `indep' if cat==``x'_i' & con==0, absorb(state_ab)
+  areg num WRLURI `indep' if cat==``x'_i' & constatus==3, absorb(state_ab)
   sum num if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
 
 
   loc y `x'_hhi
-  areg `y' WRLURI `indep' if cat==``x'_i', absorb(state_ab)
+  areg `y' WRLURI `indep' if cat==``x'_i' & constatus==1, absorb(state_ab)
   sum `y' if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
 
-  areg `y' WRLURI `indep' if cat==``x'_i' & con==1, absorb(state_ab)
+  areg `y' WRLURI `indep' if cat==``x'_i' & constatus==2, absorb(state_ab)
   sum `y' if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
 
-  areg `y' WRLURI `indep' if cat==``x'_i' & con==0, absorb(state_ab)
+  areg `y' WRLURI `indep' if cat==``x'_i' & constatus==3, absorb(state_ab)
   sum `y' if e(sample)
   loc mdv: display %9.2f `r(mean)'
   `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`x'')
+}
+
+loc y_nh_nbeds "Total number of NH beds"
+loc y_nh_days_tot "Total number of NH days"
+loc y_nh_disch_tot "Total number of NH discharges"
+loc y_nh_admit_tot "Total number of NH admissions"
+loc y_hha_snv "Total number of HHA nurse visits"
+loc y_hha_patcnt "Total number of HHA patient counts"
+
+loc k 1
+foreach y in "nh_nbeds" "nh_days_tot" "nh_disch_tot" {
+  areg `y' WRLURI `indep' if cat==`k' & constatus==1, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+  areg `y' WRLURI `indep' if cat==`k' & constatus==2, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+  areg `y' WRLURI `indep' if cat==`k' & constatus==3, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+}
+
+loc k 2
+foreach y in "hha_snv" "hha_patcnt" {
+  areg `y' WRLURI `indep' if cat==`k' & constatus==1, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+  areg `y' WRLURI `indep' if cat==`k' & constatus==2, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+  areg `y' WRLURI `indep' if cat==`k' & constatus==3, absorb(state_ab)
+  sum `y' if e(sample)
+  loc mdv: display %9.2f `r(mean)'
+  `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+}
+
+*By ownership, ZCTA-level
+use `provdata', clear
+drop if unmatched==1
+gen i =1
+gen own = 1 if fp==1
+replace own = 2 if nfp==1
+replace own  = 3 if gov==1
+drop if fp==0 & nfp==0 & gov==0
+assert own!=.
+collapse (sum) num=i nh_nbeds nh_days_tot nh_disch_tot, by(cat state_ab con* zcta WRLURI* totpop pct_* *income ln* own)
+
+*drop 2 zctas referring to 2 different states
+drop if zcta==72761 | zcta==75501
+
+lab var WRLURI "Restrictive zoning law"
+lab var num "Number of providers"
+
+merge 1:1 zcta cat using `hhi' , keep(1 3) nogen
+* only matched to NH & HHA
+
+gen constatus = 1 if con_hha==0 & con_nh==0
+replace constatus = 2 if con_nh==1 & con_hha==0
+replace constatus = 3 if con_nh==1 & con_hha==1
+lab def status 1 "Non-CON" 2 "Only CON-NH" 3 "CON-NH & CON-HHA"
+lab val constatus status
+assert constatus!=.
+
+loc file zoning4
+capture erase `reg'/`file'.xls
+capture erase `reg'/`file'.txt
+capture erase `reg'/`file'.tex
+loc out "outreg2 using `reg'/`file'.xls, tex append label"
+
+loc l1 "For-profit"
+loc l2 "Not-for-profit"
+loc l3 "Gov"
+*run regression on # providers & HHI
+forval t=1/3 {
+    areg num WRLURI `indep' if cat==1 & constatus==1, absorb(state_ab)
+    sum num if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`l`t'')
+
+    areg num WRLURI `indep' if cat==1 & constatus==2, absorb(state_ab)
+    sum num if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`l`t'')
+
+    areg num WRLURI `indep' if cat==1 & constatus==3, absorb(state_ab)
+    sum num if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`l`t'')
+}
+
+loc y_nh_nbeds "Total number of NH beds"
+loc y_nh_days_tot "Total number of NH days"
+loc y_nh_disch_tot "Total number of NH discharges"
+loc y_nh_admit_tot "Total number of NH admissions"
+loc y_hha_snv "Total number of HHA nurse visits"
+loc y_hha_patcnt "Total number of HHA patient counts"
+
+loc k 1
+forval t=1/3 {
+  foreach y in "nh_nbeds" "nh_days_tot" "nh_disch_tot" {
+    areg `y' WRLURI `indep' if cat==`k' & constatus==1 & own==`t', absorb(state_ab)
+    sum `y' if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+    areg `y' WRLURI `indep' if cat==`k' & constatus==2 & own==`t', absorb(state_ab)
+    sum `y' if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+
+    areg `y' WRLURI `indep' if cat==`k' & constatus==3 & own==`t', absorb(state_ab)
+    sum `y' if e(sample)
+    loc mdv: display %9.2f `r(mean)'
+    `out' addtext(Mean dep. var., `mdv') dec(3) fmt(fc) ctitle(`y_`y'')
+  }
 }
 
 

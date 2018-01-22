@@ -6,6 +6,9 @@ options nocenter ;
 
 * Get files;
 x "cd /home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport";
+x "wget -nv -N http://downloads.cms.gov/FILES/HCRIS/HOSP10FY&year..zip";
+x "unzip HOSP10FY&year..zip";
+
 x "wget -nv -N http://www.nber.org/hcris/2552-10/hosp_rpt2552_10_&year..csv";
 x "wget -nv -N http://www.nber.org/hcris/2552-10/hosp_nmrc2552_10_&year._long.csv";
 x "wget -nv -N http://www.nber.org/hcris/2552-10/hosp_alpha2552_10_&year._long.csv";

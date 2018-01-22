@@ -1,0 +1,54 @@
+---
+title: "DiD analysis of the impact of readmissions penalty on vertical integration"
+author: "Lucy Kim"
+date: "1/16/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+
+library(ggplot2)
+```
+
+## Trend 
+HHA
+```{r}
+df  <- read.csv("/Users/kimk13/Dropbox/Research/VI/data/DIDest/coef_VI_HHA.csv")
+
+df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+ggplot(df, aes(fy, coef)) + facet_grid(.~gp2) +
+  geom_point(aes(shape=gp2), size=3, position=position_dodge(.9)) +
+  geom_line(position=position_dodge(.9)) +
+  geom_errorbar(aes(ymin = min95, ymax = max95), position=position_dodge(.9)) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw() +
+  theme(legend.position="none") +
+  labs(title = "Trend in hospitals' HHA referral concentration for H/K patients by penalty status",
+       x="Year",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hha_did.png")
+
+```
+
+SNF
+```{r}
+df  <- read.csv("/Users/kimk13/Dropbox/Research/VI/data/DIDest/coef_VI_SNF.csv")
+
+df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+ggplot(df, aes(fy, coef)) + facet_grid(.~gp2) +
+  geom_point(aes(shape=gp2), size=3, position=position_dodge(.9)) +
+  geom_line(position=position_dodge(.9)) +
+  geom_errorbar(aes(ymin = min95, ymax = max95), position=position_dodge(.9)) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw() +
+  theme(legend.position="none") +
+  labs(title = "Trend in hospitals' SNF referral concentration for H/K patients by penalty status",
+       x="Year",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/snf_did.png")
+```

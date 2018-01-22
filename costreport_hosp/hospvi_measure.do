@@ -43,6 +43,30 @@ use `an', clear
 *use fyear as the year basis
 collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) beds dischrg totsnfdays snfdays swbsnfdays totepi_st totepi_out , by(prov_num state fyear)
 
+*tag outlier bed size hospitalss
+tab beds
+tab prov if beds > 3000 & bed!=.
+gen outlierbed = beds > 3000 & bed!=.
+bys prov: egen mm = max(outlierbed)
+
+preserve
+keep if mm==1
+keep prov
+duplicates drop
+merge 1:m prov using `an', keepusing(beds fy) keep(3) nogen
+sort prov fy
+restore
+
+*recode the outlier # beds as missing and use the previous FY's value
+use `an', clear
+sum beds, de
+replace beds = . if beds > 3000 & beds!=.
+sort prov fy
+bys prov: replace beds = beds[_n-1] if beds >=.
+
+*use fyear as the year basis
+collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) beds dischrg totsnfdays snfdays swbsnfdays totepi_st totepi_out , by(prov_num state fyear)
+
 *for years before 2002, recode dummy for VI with irf & ipf because the IRF/IPF dummies were mostly missing
 tab fyear, summarize(vi_irf)
 tab fyear, summarize(vi_ipf)

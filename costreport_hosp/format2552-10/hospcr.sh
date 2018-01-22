@@ -7,7 +7,7 @@
 cd /home/hcmg/kunhee/Labor
 
 # Download raw data
-sas -nodms -noterminal download_hospcr.sas
+# sas -nodms -noterminal download_hospcr.sas
 
 # Read Hospital cost report main, numeric, alphanumeric files
 sas -nodms -noterminal read_hosp_rpt.sas
@@ -24,19 +24,19 @@ sas -nodms -noterminal crhospcr.sas
 # Create hospital panel data for each calendar year
 stata-se -q -b do crhospcr_panel_2010_2016.do
 
-# For hospital-CY, get vertical integration measures: dummy for VI, mix of PACs if VI=1, # providers per PAC type
+# # For hospital-CY, get vertical integration measures: dummy for VI, mix of PACs if VI=1, # providers per PAC type
 stata-se -q -b do hospvi_measure.do
 
-#Delete intermediate data files
-cd /home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport
-rm -f *.csv
-rm -f *.sas7bdat
-
-cd /home/hcmg/kunhee/Labor/Bayada_data
-rm -f alpha*.sas7bdat
-rm -f nmrc*.sas7bdat
-rm -f hospcr201?.sas7bdat
-mv hospcr2010.dta hospcr2010_2552_10.dta
-mv hospcr2011.dta hospcr2011_2552_10.dta
-gzip hospcr201?.dta
-gzip hospcr2011_2552_10.dta
+# #Delete intermediate data files
+# cd /home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport
+# rm -f *.csv
+# rm -f *.sas7bdat
+#
+# cd /home/hcmg/kunhee/Labor/Bayada_data
+# rm -f alpha*.sas7bdat
+# rm -f nmrc*.sas7bdat
+# rm -f hospcr201?.sas7bdat
+# mv hospcr2010.dta hospcr2010_2552_10.dta
+# mv hospcr2011.dta hospcr2011_2552_10.dta
+# gzip hospcr201?.dta
+# gzip hospcr2011_2552_10.dta
