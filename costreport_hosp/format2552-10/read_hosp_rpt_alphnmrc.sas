@@ -14,7 +14,7 @@ x "cd /home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport";
    On a PC, use backslashes in paths as in C:\  ;
 
 %macro loop;
-%do year=2014 %to 2014;
+%do year=2010 %to 2017;
 proc printto log  ="/home/hcmg/kunhee/Labor/read_hosp_rpt_alphnmrc&year..log";
 proc printto print="/home/hcmg/kunhee/Labor/read_hosp_rpt_alphnmrc&year..lst";
 FILENAME datafile "/home/hcmg/kunhee/Labor/Bayada_data/Hospital/costreport/hosp_alpha2552_10_&year._long.csv";

@@ -61,7 +61,7 @@ VALUE $util_cd
    On a PC, use backslashes in paths as in C:\  ;
 
 %macro loop;
-%do year=2014 %to 2014;
+%do year=2010 %to 2017;
 /* proc printto log  ="/home/hcmg/kunhee/Labor/read_hosp_rpt&year..log";
 proc printto print="/home/hcmg/kunhee/Labor/read_hosp_rpt&year..lst"; */
 

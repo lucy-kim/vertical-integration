@@ -100,13 +100,17 @@ data merged;
     proc contents data=library.hospcr&year.;
 
     *stat-transfer;
-    x "qrsh -now no st hospcr&year..sas7bdat hospcr&year..dta -y";
+    x "qrsh -now no st hospcr&year..sas7bdat hospcr&year._2552_10.dta -y";
 %end;
 %mend;
 
-%loopalpha(fyear=2014,lyear=2014);
-%loopnmrc(fyear=2014,lyear=2014);
-%loop(fyear=2014,lyear=2014);
+%loopalpha(fyear=2010,lyear=2017);
+%loopnmrc(fyear=2010,lyear=2017);
+%loop(fyear=2010,lyear=2017);
 
-/* x "mv hospcr2010.dta hospcr2010_2552_10.dta";
-x "mv hospcr2011.dta hospcr2011_2552_10.dta"; */
+x "mv hospcr2012_2552_10.dta hospcr2012.dta";
+x "mv hospcr2013_2552_10.dta hospcr2013.dta";
+x "mv hospcr2014_2552_10.dta hospcr2014.dta";
+x "mv hospcr2015_2552_10.dta hospcr2015.dta";
+x "mv hospcr2016_2552_10.dta hospcr2016.dta";
+x "mv hospcr2017_2552_10.dta hospcr2017.dta";

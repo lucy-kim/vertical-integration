@@ -15,15 +15,16 @@ forval x = 1/4 {
 
 *create FY (ending in June) using months
 gen fy = .
-forval x = 2011/2015 {
+forval x = 2011/2016 {
   loc y = `x'-1
   replace fy = `x' if (dischyear==`y' & qtr>=3 & qtr <=4) | (dischyear==`x' & qtr>=1 & qtr <=2)
 }
 
 *drop for now July-Dec 2015 b/c they belong to FY 2016
-drop if dischyear ==2015 & dischm > 6
+/* drop if dischyear ==2015 & dischm > 6 */
 assert fy!=.
 
+*fiscal year level HHI
 collapse (sum) dischnum, by(pac condition provid pacprovid fy)
 
 *merge with HRR data
@@ -33,6 +34,46 @@ merge m:1 provider using `path'/dartmouth/hosp_hrr_xwalk, keep(1 3) nogen
 tempfile match
 save `match'
 
+*for each hospital, leave out the own hospital's # referrals, so within the same HRR, different hospitals have different PAC market concentration
+foreach g of varlist hrrnum hsanum {
+  use `match', clear
+  bys pac cond fy `g' pacprovid: egen tot = sum(dischnum)
+  gen tot_hout = tot - dischnum
+  list pac cond fy `g' pacprovid provid dischnum tot* in 1/30
+  drop if `g'==.
+
+  *total market size for each year
+  bys pac condition fy `g': egen tot2 = sum(dischnum)
+  *how much contributed by each hospital
+  bys pac condition fy `g' provid: egen tot2_h = sum(dischnum)
+  gen tot2_hout = tot2 - tot2_h
+  gen sh = (tot_hout/ tot2_hout)^2
+  collapse (sum) pac_mkt_hhi = sh, by(pac condition fy `g' provid)
+  assert pac_mkt_hhi >= 0 & pac_mkt_hhi <=1
+  tempfile hhi_`g'
+  save `hhi_`g''
+}
+
+*reshape to HRR (HSA)-FY-hospital level data
+foreach g0 in "hrr" "hsa" {
+  loc g `g0'num
+  use `hhi_`g'', clear
+  des
+  rename provider provid
+  rename pac_mkt_hhi `g0'hhi_
+  reshape wide `g0'hhi_, i(condition `g' fy provid) j(pac) string
+
+  foreach v of varlist *SNF *HHA {
+    rename `v' `v'_
+  }
+
+  reshape wide *hhi*, i(`g' fy provid) j(condition) string
+
+  compress
+  save `path'/`g0'hhi, replace
+}
+
+/*
 *aggregate across hospitals the # referrals to the PAC provider-FY-market level for each PAC type & condition
 foreach g of varlist hrrnum hsanum {
   use `match', clear
@@ -65,3 +106,4 @@ foreach g0 in "hrr" "hsa" {
   compress
   save `path'/`g0'hhi, replace
 }
+*/

@@ -2,194 +2,116 @@
 
 loc gph /ifs/home/kimk13/VI/gph
 loc reg /ifs/home/kimk13/VI/tbls
+loc dta /ifs/home/kimk13/VI/data
 
-cd /ifs/home/kimk13/VI/data/Medicare
+cd `dta'/Medicare
 
-loc f index_freq_no16.csv
-insheet using `f', comma names clear
-tempfile index
-save `index'
-
-*aggregate across destinations (ddest=06 for HHC, 03 for SNF)
-use `index', clear
-collapse (mean) dischnum white black read* ses_score, by(condition provid dischyear dischmth)
-tempfile index2
-save `index2'
-
-loc f match_freq_no16.csv
-insheet using `f', comma names clear
-rename provider pacprovid
-
-*are all the month-year present?
-preserve
-keep dischyear dischmth
-duplicates drop
-tab dischyear
-*2010/6 - 2015/12
-restore
-
-*create quarters using months
-gen qtr = .
-forval x = 1/4 {
-  replace qtr = `x' if dischmth >= 1+(`x'-1)*3 & dischmth <= 3*`x'
-}
-
-*create FY (ending in June) using months
-gen fy = .
-forval x = 2011/2015 {
-  loc y = `x'-1
-  replace fy = `x' if (dischyear==`y' & qtr>=3 & qtr <=4) | (dischyear==`x' & qtr>=1 & qtr <=2)
-}
-
-tempfile match
-save `match'
-
-*restrict to hospitals that are subject to HRRP penalty; keep only hospitals that are penalized in FY 2015
-use /ifs/home/kimk13/VI/data/hrrp_penalty, clear
-keep if fy==2015
-keep provid
-duplicates drop
-destring provid, replace
-tempfile hosp_keep
-save `hosp_keep'
-
-use `match', clear
-merge m:1 provid using `hosp_keep', keep(3) nogen
-*for 2013-2015, about 240-246 hospitals in the penalty data unmatched (_m=2)
-*fy 2016-2018 unmatched - fine b/c i don't have them
-
-*drop for now July-Dec 2015 b/c they belong to FY 2016
-drop if dischyear ==2015 & dischm > 6
-assert fy!=.
-
-*rename vars before merging with index admissions data
-foreach v of varlist dischnum-samh90 {
-  rename `v' `v'_pac
-}
-
-sort pac condition provid dischyear dischmth pacprovid
-
-tempfile match_pnlthosp
-save `match_pnlthosp'
-
-*------------------------------------
 *construct hosp-FY level data containing referral concentration for each PAC type (SNF/HHA)-condition
 *aggregate to the hospital-PAC provider-FY level
-use `match_pnlthosp', clear
-collapse (sum) dischnum_pac-samh90_pac, by(pac condition provid pacprovid fy)
+*use referral_tchpm, clear
+use PACreferral_tchpm, clear
+*drop if pac==""
+collapse (sum) dischnum_pac, by(pac condition provid fy pacprovid)
 
 * by condition-FY, level & growth rate of referral concentration among PAC providers
 bys pac condition provid fy: egen tot = sum(dischnum)
 gen refshsq = (dischnum/tot)^2
 
 *aggregate to the hospital-FY level
-collapse (sum) refhhi = refshsq dischnum_pac-samh90_pac, by(pac condition provid fy)
+collapse (sum) refhhi = refshsq, by(pac condition provid fy)
 assert refhhi <= 1
 
 tempfile hosp_fy_ref
 save `hosp_fy_ref'
 *------------------------------------
 * construct hosp-FY level data using the index admissions data
-use `index2', clear
 
-*create quarters using months
-gen qtr = .
-forval x = 1/4 {
-  replace qtr = `x' if dischmth >= 1+(`x'-1)*3 & dischmth <= 3*`x'
-}
+*restrict to hospitals that are subject to HRRP penalty; keep only hospitals that are penalized in FY 2015
+use `dta'/hrrp_penalty, clear
+keep if fy ==2013
+keep provid
+duplicates drop
+destring provid, replace
+tempfile hosp_keep
+save `hosp_keep'
 
-*create FY (ending in June) using months
-gen fy = .
-forval x = 2008/2015 {
-  loc y = `x'-1
-  replace fy = `x' if (dischyear==`y' & qtr>=3 & qtr <=4) | (dischyear==`x' & qtr>=1 & qtr <=2)
-}
-assert dischyear==2015 if fy==.
-tab dischm if fy==.
+*tag hospitals whose mean number of discharges for all those conditions across FY is < 50
+use index_admit_chm.dta, clear
+keep if fy==2011
+collapse (sum) dischnum, by(provid)
+drop if dischnum < 50
+/* collapse (sum) dischnum, by(provid fy)
+tab dischnum
+bys provid: egen mm = mean(dischnum)
+drop if mm < 50 */
+keep provid
+duplicates drop
+tempfile hosp_keep2
+save `hosp_keep2'
 
-*drop for now July-Dec 2015 b/c they belong to FY 2016
-drop if dischyear ==2015 & dischm > 6
-assert fy!=.
+*from the PAC referral data, create hospital-FY level data
+use PACreferral_tchpm, clear
+collapse (sum) dischnum_pac-samh90_pac, by(pac condition provid fy)
+tempfile ref
+save `ref'
+
+use index_admit_chm, clear
+keep if fy > 2010
+merge m:1 provid using `hosp_keep', keep(3) nogen
+merge m:1 provid using `hosp_keep2', keep(3) nogen
 
 collapse (sum) dischnum-read90 (mean) ses_score, by(condition provid fy)
 
-tempfile index2_fy
-save `index2_fy'
+expand 2
+bys condition provid fy: gen pac = "SNF" if _n==1
+bys condition provid fy: replace pac = "HHA" if _n==2
 
-*merge with index admissions data
-use `hosp_fy_ref', clear
-merge m:1 condition provid fy using `index2_fy', keep(1 3) nogen
-* all merged
-
-tempfile init
-save `init'
-
-*------------------------------------
-*merge with HRRP data
-use /ifs/home/kimk13/VI/data/hrrp_penalty, clear
-drop if fy > 2015
-assert err_hk!=. if fy>=2015
-foreach d in "ami" "hf" "pn" "hk" "copd" {
-    di "`d'"
-    sum n_`d' if err_`d'==0
+merge 1:1 pac condition provid fy using `ref', keep(1 3)
+foreach v of varlist *_pac {
+  replace `v' = 0 if _m==1
 }
-*ERR = 0 if # cases for the condition is < 25
+drop _m
 
-foreach d in "ami" "hf" "pn" "hk" "copd" {
-    di "`d'"
-    sum err_`d' if n_`d' > 25
-}
+*merge with referral HHI data
+merge 1:1 pac condition provid fy using `hosp_fy_ref', keep(1 3) nogen
 
-*get distribution of the number of cases
-
-destring provid, replace
-
-tempfile penalty
-save `penalty'
-*------------------------------------
-*get hosp chars data from the cost report & AHA data
-insheet using /ifs/home/kimk13/VI/data/costreport/hosp_vi.csv, comma names clear
-keep if pac=="hha" | pac=="snf"
-drop if fy > 2015 | fy < 2011
-sort prov_num fy pac
-keep prov_num fyear state pac vi teaching urban own_* beds dischrg size
-reshape wide vi, i(prov_num fyear state) j(pac) string
-rename vihha own_hha
-rename visnf own_snf
-
-*recode the outlier # beds as missing and use the previous FY's value
-replace beds = . if beds > 3000 & beds!=.
-sort prov fy
-bys prov: replace beds = beds[_n-1] if beds >=.
-
-rename prov_num provid
+*merge with hospital chars data from cost report
+gen prov_num = string(provid, "%06.0f")
+rename fy fyear
+merge m:1 prov_num fyear using `dta'/costreport/hosp_chars_cr, keep(1 3)
 rename fyear fy
-duplicates drop
+drop vi_renal-vi_asc vi_ipf vi_swbsnf-vi_rhc vi_hospice vi_nf state
 
-duplicates tag provid fy, gen(dup)
-assert dup==0
-drop dup
+sort pac cond provid fy
+foreach v of varlist vi_snf - urban {
+    bys pac cond provid: replace `v' = `v'[_n-1] if `v' >= .
+}
+gsort pac cond provid -fy
+foreach v of varlist vi_snf - urban {
+    bys pac cond provid: replace `v' = `v'[_n-1] if `v' >= .
+}
 
-sort provid fy
-tempfile costreport
-save `costreport'
-*------------------------------------
-*merge the VI data with penalty & hosp chars data
-use `init', clear
-merge m:1 provid fy using `penalty', keep(1 3) nogen
-merge m:1 provid fy using `costreport', keep(1 3) nogen
+drop _m
 
-*append pre-2011 data from the index admissions data
-preserve
-use `index2_fy', clear
-keep if fy < 2011
-tempfile index2_fy_pre2011
-save `index2_fy_pre2011'
-restore
+*merge with inpatient Medicare payment data for each condition
+merge m:1 cond provid using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_2014, keep(1 3)
 
-append using `index2_fy_pre2011'
+sort pac cond provid fy
+list pac cond provid fy tot_pat_rev tmcr_pmt _m in 1/30
 
-*------------------------------------
+/* preserve
+use `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hk_hosp, clear
+restore */
+
+* exclude hospitals with small # beds
+bys provid: egen a = min(beds)
+sum beds if a >= 30
+drop if a < 30
+drop a
+sum beds
+
+merge 1:1 pac cond provid dischyear qtr fy using `refhhi', nogen
+
 *get PAC market concentration
 
 *get HRR, HSA of hospital from dartmouth atlas data
@@ -198,14 +120,90 @@ merge m:1 provid using /ifs/home/kimk13/VI/data/dartmouth/hosp_hrr_xwalk, keepus
 rename provider provid
 
 *merge with HRR (HSA)-FY level PAC market HHI data
+capture drop _m
 foreach g0 in "hrr" "hsa" {
   loc g `g0'num
-  merge m:1 `g' fy using /ifs/home/kimk13/VI/data/`g0'hhi, keep(1 3)
+  merge m:1 `g' provid fy using `dta'/`g0'hhi, keep(1 3) nogen
+}
+
+tempfile init
+save `init'
+
+*------------------------------------
+*merge with HRRP data
+use `dta'/hrrp_penalty, clear
+drop if fy > 2016
+assert err_hk!=. if fy>=2015
+foreach d in "ami" "hf" "pn" "hk" "copd" {
+    di "`d'"
+    sum n_`d' if err_`d'==0
+    replace err_`d' = . if err_`d'==0
+}
+*ERR = 0 if # cases for the condition is < 25
+
+*get distribution of the number of cases
+
+destring provid, replace
+
+tempfile penalty
+save `penalty'
+
+*------------------------------------
+*merge the VI data with penalty & hosp chars data
+use `init', clear
+merge m:1 provid fy using `penalty', keep(1 3) nogen
+*note: some hospitals are matched to penalty data only for after 2013 - identify these by finding pnltr==.
+
+/* *append pre-2011 data from the index admissions data
+preserve
+use `index2_fy', clear
+keep if fy < 2011
+tempfile index2_fy_pre2011
+save `index2_fy_pre2011'
+restore
+
+append using `index2_fy_pre2011' */
+
+*------------------------------------
+*get PAC market concentration
+
+*get HRR, HSA of hospital from dartmouth atlas data
+rename provid provider
+merge m:1 provid using `dta'/dartmouth/hosp_hrr_xwalk, keepusing(hrrnum hsanum) keep(1 3) nogen
+rename provider provid
+
+*merge with HRR (HSA)-FY level PAC market HHI data
+foreach g0 in "hrr" "hsa" {
+  loc g `g0'num
+  merge m:1 `g' fy provid using `dta'/`g0'hhi, keep(1 3)
   assert `g'==. | fy < 2011 if _m==1
   drop _merge
 }
 
 *get # PAC providers in the state - more exogenous?
+
+
+
+*---------------------
+
+*restrict to hospitals that have # discharges >= 30 in FY 2011
+foreach c in "AMI" "HF" "PN" "HK" {
+  gen x = dischnum if fy==2011 & cond=="`c'"
+  bys provid: egen xx = max(x)
+  drop if xx < 10
+  drop x xx
+}
+
+*restrict to hospitals that have # discharges >= 30 in FY 2011
+foreach c in "AMI" "HF" "PN" "HK" {
+  sum dischnum if fy==2011 & cond=="`c'"
+}
+tab fy if cond=="AMI" & pac=="SNF"
+
+
+merge m:1 provid using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hk_hosp, keep(1 3)
+
+
 
 compress
 save hosp_fy_VI, replace

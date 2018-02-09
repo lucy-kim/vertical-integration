@@ -10,45 +10,34 @@ cd /ifs/home/kimk13/VI/data/Medicare
 
 *sample exclusion
 
-*restrict to FY 2011-2015
+*restrict to FY 2011-2016
 use hosp_fy_VI, clear
 keep if fy > 2010
 
-*get a distribution of mean # beds across years & exclude those with small # beds
-preserve
-collapse (max) beds, by(provid)
-*tab beds
+*restrict to hospitals that have
 
-hist beds, frac width(20)
-graph export `gph'/test.eps, replace
+*restrict to hospitals that have greater than 25 cases for all conditions in FY 2013
+foreach c in "ami" "hf" "pn" {
+  gen x = n_`c' if fy==2013
+  bys provid: egen xx = max(x)
+  drop if xx < 25
+  drop x xx
+}
+foreach c in "hk"{
+  gen x = n_`c' if fy==2015
+  bys provid: egen xx = max(x)
+  drop if xx < 25
+  drop x xx
+}
 
-*tag beds < 30
-gen smallbeds = beds < 30
-tab smallbeds
-*93 hospitals
+tab fy if cond=="AMI" & pac=="SNF"
 
-drop beds
-tempfile smallbeds
-save `smallbeds'
-restore
-
-merge m:1 provid using `smallbeds', nogen
-drop if smallbeds==1
-drop smallbeds
-
-*drop hospitals that had # HK cases < 50 in 2015
-count if fy==2015 & cond=="AMI" & pac=="HHA"
-*2238
-tab n_hk if fy==2015 & cond=="AMI" & pac=="HHA"
-count if fy==2015 & cond=="AMI" & pac=="HHA" & n_hk < 50
-*133/2238 = 6%
-
-capture drop smallhk
+/* capture drop smallhk
 gen smallhk = 1 if n_hk < 50 & fy==2015
 loc v smallhk
 bys provid: egen mm = max(smallhk)
 drop if mm==1
-drop mm smallhk
+drop mm smallhk */
 
 *reconstruct size category b/c missing values in bed is filled with previously available values
 *create hospital size category
@@ -61,36 +50,12 @@ replace size = . if beds==.
 
 xi i.fy i.size
 
-*link the ERR in each condition in year t with year t-2
-preserve
-use /ifs/home/kimk13/VI/data/hrrp_penalty, clear
-
-*first, since ERR = 0 if # cases for the condition < 25, recode it to missing
-foreach v of varlist err* {
-    replace `v' = . if `v'==0
-}
-sort provid fy
-gen fy_l2 = fy - 2
-
-list provid fy* err_pn in 1/10
-
-drop fy
-rename fy_l2 fy
-
-foreach v of varlist err* {
-    rename `v' `v'_lead2
-}
-keep provid *lead2 fy
-tab fy
-destring provid, replace
-tempfile pnlt_lead2
-save `pnlt_lead2'
-restore
-
-merge m:1 provid fy using `pnlt_lead2', keep(1 3) nogen
-
 tempfile an
 save `an'
+
+*-------------------
+*for each hospital,
+
 
 *-------------------
 *reg model: VI_ht = a_h + b_t + c1*Post*[Penalized for H/K in 2015] + c2*Post*[Not penalized for H/K in 2015] + d*X_ht + e_ht

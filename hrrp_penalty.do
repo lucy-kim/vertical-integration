@@ -116,6 +116,8 @@ lab var pnltr "Readmissions penalty rate"
 lab var provid "Hospital Medicare provider ID"
 lab var fy "fiscal year"
 
+destring provid, replace
+
 compress
 save hrrp_penalty, replace
 *---------------------------------

@@ -11,44 +11,533 @@ knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
 
 library(ggplot2)
+library(zoo)
 ```
 
-## Trend 
+## Trend in VI by FY
 HHA
 ```{r}
-df  <- read.csv("/Users/kimk13/Dropbox/Research/VI/data/DIDest/coef_VI_HHA.csv")
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
+# if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
 
-df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
 
-ggplot(df, aes(fy, coef)) + facet_grid(.~gp2) +
-  geom_point(aes(shape=gp2), size=3, position=position_dodge(.9)) +
-  geom_line(position=position_dodge(.9)) +
-  geom_errorbar(aes(ymin = min95, ymax = max95), position=position_dodge(.9)) + 
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+
+# df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+ggplot(df, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
   geom_hline(aes(yintercept=0), linetype="dashed") + 
   theme_bw() +
   theme(legend.position="none") +
-  labs(title = "Trend in hospitals' HHA referral concentration for H/K patients by penalty status",
-       x="Year",
+  labs(title = "Trend in hospitals' HHA referral concentration by condition",
+       x="Quarter",
        y="")
-ggsave("~/Dropbox/Research/VI/gph/hha_did.png")
+ggsave("~/Dropbox/Research/VI/gph/hha_did2.png", width=15, height=10, units="cm")
+```
 
+
+
+## Trend in VI by quarters
+HHA
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
+# if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
+
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+
+# df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+ggplot(df, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw() +
+  theme(legend.position="none") +
+  labs(title = "Trend in hospitals' HHA referral concentration by condition",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hha_did2.png", width=15, height=10, units="cm")
 ```
 
 SNF
 ```{r}
-df  <- read.csv("/Users/kimk13/Dropbox/Research/VI/data/DIDest/coef_VI_SNF.csv")
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_SNF_qtradj2.csv")
 
-df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
 
-ggplot(df, aes(fy, coef)) + facet_grid(.~gp2) +
-  geom_point(aes(shape=gp2), size=3, position=position_dodge(.9)) +
-  geom_line(position=position_dodge(.9)) +
-  geom_errorbar(aes(ymin = min95, ymax = max95), position=position_dodge(.9)) + 
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+summary(df)
+
+ggplot(df, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
   geom_hline(aes(yintercept=0), linetype="dashed") + 
   theme_bw() +
   theme(legend.position="none") +
-  labs(title = "Trend in hospitals' SNF referral concentration for H/K patients by penalty status",
-       x="Year",
+  labs(title = "Trend in hospitals' SNF referral concentration by condition",
+       x="Quarter",
        y="")
-ggsave("~/Dropbox/Research/VI/gph/snf_did.png")
+ggsave("~/Dropbox/Research/VI/gph/snf_did2.png", width=15, height=10, units="cm")
+
+
+# df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+# ggplot(df, aes(fy, coef)) + facet_grid(.~gp2) +
+#   geom_point(aes(shape=gp2), size=3, position=position_dodge(.9)) +
+#   geom_line(position=position_dodge(.9)) +
+#   geom_errorbar(aes(ymin = min95, ymax = max95), position=position_dodge(.9)) + 
+#   geom_hline(aes(yintercept=0), linetype="dashed") + 
+#   theme_bw() +
+#   theme(legend.position="none") +
+#   labs(title = "Trend in hospitals' SNF referral concentration for H/K patients by penalty status",
+#        x="Year",
+#        y="")
+# ggsave("~/Dropbox/Research/VI/gph/snf_did.png")
+```
+
+## Trend in the share of referrals to PAC 
+HHA
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_shref_HHA_qtradj.csv")
+# if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
+
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+
+# df$gp2 <- factor(df$gp, levels = c("pnlt_onlyhk15", "pnlt_hk15", "pnlt_nohk15"), labels=c("Penalized only for H/K", "Penalized for H/K", "Penalized for non H/K")) 
+
+ggplot(df, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw() +
+  theme(legend.position="none") +
+  labs(title = "Trend in hospitals' share of hospital discharges referred to HHA",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hha_did_shref.png", width=15, height=10, units="cm")
+```
+
+SNF
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_shref_SNF_qtradj.csv")
+
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+summary(df)
+
+ggplot(df, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw() +
+  theme(legend.position="none") +
+  labs(title = "Trend in hospitals' share of hospital discharges referred to SNF",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/snf_did_shref.png", width=15, height=10, units="cm")
+```
+
+
+## By the readmission risk, how did the readmission rate & integration change over time? 
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_DiD_qtr_iv_adj.csv")
+df <- subset(df, iv=="rblack")
+
+df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels= c("AMI", "HF", "PN", "HK"))
+                  # labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+# df$iv <- factor(df$iv, levels = c("rblack", "ses_score", "rreadmit90"), c("% Black", "SES score", "90-day readmission"))
+df$iv <- factor(df$iv, levels = c("rblack"), c("% Black"))
+df$y <- factor(df$y, levels = c("refhhi", "rread30p"), c("Referral concentration", "30-day PAC readmission rate"))
+
+df$yq <- paste0(df$yr, "-Q", df$qtr)
+df$yqd <- as.yearqtr(df$yq, format = "%Y-Q%q")
+summary(df)
+```
+
+### Using only the % blacks, 
+```{r}
+df2 <- subset(df, pac=="HHA" & y=="Referral concentration")
+
+ggplot(df2, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on HHA referral concentration",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hha_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+df2 <- subset(df, pac=="SNF" & y=="Referral concentration")
+
+ggplot(df2, aes(yqd, coef)) + facet_grid(cond~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on SNF referral concentration",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/snf_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+```
+
+### Using different predictors of initial risk penalty
+HHA
+```{r}
+df2 <- subset(df, cond=="HK" & pac=="HHA")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to HHA",
+       subtitle = "Hip/Knee",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hk_hha_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+
+
+df2 <- subset(df, cond=="AMI" & pac=="HHA")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to HHA",
+       subtitle = "AMI",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/ami_hha_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+
+df2 <- subset(df, cond=="HF" & pac=="HHA")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to HHA",
+       subtitle = "HF",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hf_hha_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+
+df2 <- subset(df, cond=="PN" & pac=="HHA")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to HHA",
+       subtitle = "Pneumonia",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/pn_hha_impact_bytop3rd.png", width=15, height=15, units="cm")
+```
+
+SNF
+```{r}
+df2 <- subset(df, cond=="HK" & pac=="SNF")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to SNF",
+       subtitle = "Hip/Knee",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hk_SNF_impact_bytop3rd.png", width=15, height=20, units="cm")
+
+
+
+df2 <- subset(df, cond=="AMI" & pac=="SNF")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to SNF",
+       subtitle = "AMI",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/ami_SNF_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+
+df2 <- subset(df, cond=="HF" & pac=="SNF")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to SNF",
+       subtitle = "HF",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/hf_SNF_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+
+df2 <- subset(df, cond=="PN" & pac=="SNF")
+
+ggplot(df2, aes(yqd, coef, colour = y)) + facet_grid(iv~.) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to SNF",
+       subtitle = "Pneumonia",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/pn_SNF_impact_bytop3rd.png", width=15, height=15, units="cm")
+```
+
+## Do initial risk of factors predict the penalty ERRs?
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/penaltystatus_iv.csv")
+df$top3rd_rblack <- factor(df$top3rd_rblack)
+df$top3rd_rnonwhite <- factor(df$top3rd_rnonwhite)
+df$top3rd_rread30 <- factor(df$top3rd_rread30)
+df$top3rd_ses_score <- factor(df$top3rd_ses_score)
+
+df$penalized <- factor(df$pnltr > 0)
+
+df2 <- subset(df, err_!=0 & fy < 2017)
+
+df2$fy <- factor(df2$fy)
+
+# black is pretty much a linear predictor
+ggplot(df2, aes(x=rblack, y=err_, colour=fy)) + facet_grid(.~condition) +
+  geom_smooth()  theme_bw(base_size = 11) +
+  theme(legend.position="bottom") +
+  labs(title = "Impact of initial penalty risk on 30-day readmission rates and \nreferral concentration among patients referred to SNF",
+       subtitle = "Pneumonia",
+       x="Quarter",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/pn_SNF_impact_bytop3rd.png", width=15, height=15, units="cm")
+
+ggplot(df2, aes(x=rblack, colour=fy, linetype=penalized)) + facet_grid(condition~.) +
+  geom_density() +
+theme_bw(base_size = 11) +
+  theme(legend.position="bottom")
+
+ggplot(df2, aes(x=rnonwhite, y=err_, colour=fy)) + facet_grid(condition~.) +
+  geom_smooth()
+
+ggplot(df2, aes(x=rread30, y=err_, colour=fy, linetype=penalized)) +
+  geom_smooth()
+
+ggplot(df2, aes(x=ses_score, y=err_, colour=fy, linetype=penalized)) +
+  geom_smooth()
+
+```
+
+## Fiscal-year level analysis
+H/K
+```{r}
+df  <- read.csv("/Users/kimk13/Dropbox/Research/VI/data/DIDest/coef_DiD_fy_pnltprs_hk.csv")
+# if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
+
+df$est <- factor(df$est, labels = c("Top 3rd penalty pressure for H/K", "Rest"))
+
+df2 <- subset(df, y=="refhhi")
+
+ggplot(df2, aes(fy, coef, colour=est, linetype=est)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in hospitals' H/K referral concentration \nin top 3rd of penalty pressure compared to other penatly conditions",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhi.png", width=15, height=10, units="cm")
+
+
+df2 <- subset(df, y=="refhhigr")
+
+ggplot(df2, aes(fy, coef, colour=est, linetype=est)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in growth (%) of hospitals' H/K referral concentration \nin top 3rd of penalty pressure compared to other penatly conditions",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhigr.png", width=15, height=10, units="cm")
+```
+
+Other conditions (Ami, PN, HF)
+```{r}
+df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_DiD_fy_pnltprs_other.csv")
+# if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
+
+df2 <- subset(df, y=="refhhi" & cond=="AMI")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in hospitals' AMI referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhi_AMI.png", width=15, height=10, units="cm")
+
+df2 <- subset(df, y=="refhhi" & cond=="HF")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in hospitals' HF referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhi_HF.png", width=15, height=10, units="cm")
+
+df2 <- subset(df, y=="refhhi" & cond=="PN")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in hospitals' PN referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhi_PN.png", width=15, height=10, units="cm")
+
+
+
+df2 <- subset(df, y=="refhhigr" & cond=="AMI")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in growth (%) of hospitals' AMI referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhigr_AMI.png", width=15, height=10, units="cm")
+
+df2 <- subset(df, y=="refhhigr" & cond=="HF")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in growth (%) of hospitals' HF referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhigr_HF.png", width=15, height=10, units="cm")
+
+df2 <- subset(df, y=="refhhigr" & cond=="PN")
+
+ggplot(df2, aes(fy, coef)) + facet_grid(.~pac) +
+  geom_point(size=3) +
+  geom_line() +
+  # geom_errorbar(aes(ymin = min95, ymax = max95)) + 
+  geom_ribbon(aes(ymin = min95, ymax = max95), alpha=0.2) + 
+  geom_hline(aes(yintercept=0), linetype="dashed") + 
+  theme_bw(base_size = 10) +
+  theme(legend.position="bottom",
+        legend.title=element_blank()) +
+  labs(title = "Trend in growth (%) of hospitals' PN referral concentration \nin top 3rd of penalty pressure",
+       x="FY",
+       y="")
+ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhigr_PN.png", width=15, height=10, units="cm")
+
+
 ```
