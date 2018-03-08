@@ -8,6 +8,8 @@ cd `dta'/Medicare
 
 use VI_hospsmpl, clear
 
+*aggregate AMI, HF, PN conditions
+
 *create size of Medicare payment for each hospital-fy t where t = 2012, 2013, ... using the sum of Medicare payment for the period {t-3, t-2, t-1}
 capture drop x
 foreach v of varlist mcr_pmt tot_pat_rev {
