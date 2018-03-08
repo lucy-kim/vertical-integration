@@ -22,6 +22,7 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
        ( WKSHT_CD EQ "S300001"  )
        or ( WKSHT_CD EQ "S410000" )
        or ( WKSHT_CD EQ "S200000" )
+       or ( WKSHT_CD EQ "G300000" )
        )
        ;
 
@@ -47,6 +48,13 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
            when (WKSHT_CD EQ "S300001" and CLMN_NUM="0100" and LINE_NUM="01200") varname="beds"; *# beds;
            when (WKSHT_CD EQ "S300001" and CLMN_NUM="1500" and LINE_NUM="01200") varname="dischrg"; *# discharges;
 
+           * financial;
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00100") varname="tot_pat_rev";
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00300") varname="net_pat_rev";
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00400") varname="tot_oper_exp";
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00500") varname="net_pat_inc";
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="02500") varname="tot_oth_inc";
+           when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="03000") varname="tot_net_inc";
            otherwise;
              end;
          run;
@@ -58,4 +66,4 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
                run;
      %end;
  %mend;
- %loop(fyear=2010,lyear=2011);
+ %loop(fyear=2007,lyear=2011);

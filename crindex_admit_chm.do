@@ -4,7 +4,7 @@ loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-loc f index_freq_no16.csv
+loc f index_freq.csv
 insheet using `f', comma names clear
 tempfile index
 save `index'
@@ -63,16 +63,3 @@ drop _m date
 
 compress
 save index_admit_chm, replace
-
-
-
-
-*create a base monthly list
-preserve
-keep dischyear dischmth ym
-duplicates drop
-tab dischyear
-*2010/6 - 2015/12
-gen ym = ym(dischyear, dischmth)
-*606 - 671 = 66
-restore

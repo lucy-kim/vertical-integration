@@ -3,8 +3,8 @@
 cd /home/hcmg/kunhee/Labor/Bayada_data
 
 *append all years of Cost report data
-use hospcr1996, clear
-forval y = 1997/2009 {
+clear
+forval y = 2007/2009 {
     append using hospcr`y'
 }
 append using hospcr2010_2552_96
@@ -14,9 +14,6 @@ replace prov_num = prvdr_num if prov_num==""
 assert prov_num==prvdr_num
 drop prvdr_num
 assert fyear!=.
-
-duplicates tag prov_num fyear, gen(dup)
-tab dup
 
 *recode some vars as 0/1 dummies
 lab define provtype 1 "general short-term" 2 "general long-term" 3 "cancer" 4 "psychiatric" 5 "rehab" 6 "religious non-medical" 7 "children" 8 "alcohol/drug" 9 "other", replace
@@ -101,8 +98,29 @@ replace state = "TX" if ssastate=="67" & state==""
 drop if state=="PR" | state=="MP" | state=="GU" | state=="VI" | state==""
 
 *even if there are duplicates per prov_num-FY, it seems to cover different CR periods (see cr_start, cr_end vars), so don't worry
-drop dup ssastate st0
+drop ssastate st0
 
+*if a hospital-FY appears more than once, keep the record whose fiscal intermediary receipt date is later
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+bys prov_num fyear: egen md = max(fi_rcpt_dt)
+drop if md!=fi_rcpt_dt & dup > 0
+drop dup md
+*list prov_num fy *dt in 1/30
+
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+*if a hospital-FY still appears more than once, keep the record whose fiscal intermediary creation date is later
+bys prov_num fyear: egen md = max(fi_creat_dt)
+drop if md!=fi_creat_dt & dup > 0
+drop dup
+
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+assert dup==0
+drop dup
+
+keep prov_num *ccn teaching urban own_* dissh *rev* *inc* beds dischrg fyear
 
 compress
-save hospcr_panel_1996_2011, replace
+save hospcr_panel_2007_2011, replace

@@ -53,6 +53,55 @@ save `an'
 *----------------------------------------
 *construct the referral HHI lumping all 3 conditions: AMI, HF, PN
 use `an', clear
+
+loc lab1 Small
+loc lab2 Medium
+loc lab3 Large
+
+keep if condition == "PN"
+
+capture drop grrefhhi3
+sort pac provid fy
+bys pac provid: gen grrefhhi3 = 100*(refhhi3 - refhhi3[_n-1])/refhhi3[_n-1]
+
+
+foreach p in "HHA" "SNF" {
+  binscatter grrefhhi fy if pac=="`p'" , discrete linetype(qfit) title("Growth in `p' referral concentration for AMI, HF, PN altogether", size(medium)) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(-30 30)) ylab(-30(10)30) xsc(r(2009 2016)) xlab(2009(1)2016)
+  graph export `gph'/refhhi3_`p'.eps, replace
+
+  forval x = 1/3 {
+    binscatter grrefhhi fy if pac=="`p'" & size==`x',  discrete linetype(qfit) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(-30 30)) ylab(-30(10)30) xsc(r(2009 2016)) xlab(2009(1)2016) subti("`lab`x'' hospitals") saving(g`x', replace)
+  }
+  graph combine g1.gph g2.gph g3.gph, title("Growth in `p' referral concentration for AMI, HF, PN altogether", size(medium))
+  graph export `gph'/refhhi3_`p'_size.eps, replace
+}
+
+
+*plot growth in referral HHI for H/K
+use `an', clear
+keep if cond=="HK"
+
+capture drop grrefhhi3
+sort pac provid fy
+bys pac provid: gen grrefhhi3 = 100*(refhhi - refhhi[_n-1])/refhhi[_n-1]
+
+foreach p in "HHA" "SNF" {
+  binscatter grrefhhi fy if pac=="`p'" , discrete linetype(qfit) title("Growth in `p' referral concentration for HK", size(medium)) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(-30 30)) ylab(-30(10)30)
+  *ysc(r(0 25))  ylab(0(5)25)
+  graph export `gph'/refhhi3_`p'_hk.eps, replace
+
+  forval x = 1/3 {
+    binscatter grrefhhi fy if pac=="`p'" & size==`x',  discrete linetype(qfit) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(-30 30)) ylab(-30(10)30)
+    *ysc(r(0 25))  ylab(0(5)25) subti("`lab`x'' hospitals") saving(g`x', replace)
+  }
+  graph combine g1.gph g2.gph g3.gph, title("Growth in `p' referral concentration for HK", size(medium))
+  graph export `gph'/refhhi3_`p'_size_hk.eps, replace
+}
+
+
+
+/*
+use `an', clear
 keep provid fy
 duplicates drop
 tempfile hospkeep
@@ -110,26 +159,9 @@ foreach p in "HHA" "SNF" {
   }
   graph combine g1.gph g2.gph g3.gph, title("Growth in `p' referral concentration for AMI, HF, PN altogether", size(medium))
   graph export `gph'/refhhi3_`p'_size.eps, replace
-}
+} */
 
-*plot growth in referral HHI for H/K
-use `an', clear
-keep if cond=="HK"
 
-capture drop grrefhhi3
-sort pac provid fy
-bys pac provid: gen grrefhhi3 = 100*(refhhi - refhhi[_n-1])/refhhi[_n-1]
-
-foreach p in "HHA" "SNF" {
-  binscatter grrefhhi fy if pac=="`p'" , discrete linetype(qfit) title("Growth in `p' referral concentration for HK", size(medium)) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(0 25))  ylab(0(5)25)
-  graph export `gph'/refhhi3_`p'_hk.eps, replace
-
-  forval x = 1/3 {
-    binscatter grrefhhi fy if pac=="`p'" & size==`x',  discrete linetype(qfit) xti(Year) yti(Growth in Referral HHI (%)) ysc(r(0 25))  ylab(0(5)25) subti("`lab`x'' hospitals") saving(g`x', replace)
-  }
-  graph combine g1.gph g2.gph g3.gph, title("Growth in `p' referral concentration for HK", size(medium))
-  graph export `gph'/refhhi3_`p'_size_hk.eps, replace
-}
 *----------------------------------------
 *using 2011-2013, construct the penalty pressure = ERR X condition-specific Medicare payment / total patient revenue
 use `an', clear

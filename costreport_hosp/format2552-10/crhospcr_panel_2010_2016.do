@@ -13,9 +13,6 @@ assert prov_num==prvdr_num
 drop prvdr_num
 assert fyear!=.
 
-duplicates tag prov_num fyear, gen(dup)
-tab dup
-
 *recode some vars as 0/1 dummies
 lab define provtype 1 "general short-term" 2 "general long-term" 3 "cancer" 4 "psychiatric" 5 "rehab" 6 "religious non-medical" 7 "children" 8 "alcohol/drug" 9 "other", replace
 
@@ -90,9 +87,48 @@ drop adr_vndr_cd fi_num trnsmtl_num rpt_stus_cd
 
 drop if state=="PR" | state=="MP" | state=="GU" | state=="VI"
 
+sort prov_num fyear
+order prov_num fyear
+
+list if prov_num=="011302" & fyear==2015
+
 *even if there are duplicates per prov_num-FY, it seems to cover different CR periods (see cr_start, cr_end vars), so don't worry
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+
+*if a hospital-FY appears more than once, keep the record whose fiscal intermediary receipt date is later
+bys prov_num fyear: egen md = max(fi_rcpt_dt)
+drop if md!=fi_rcpt_dt & dup > 0
+drop dup md
+*list prov_num fy *dt in 1/30
+
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+*if a hospital-FY still appears more than once, keep the record whose fiscal intermediary creation date is later
+bys prov_num fyear: egen md = max(fi_creat_dt)
+drop if md!=fi_creat_dt & dup > 0
 drop dup
 
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+
+sort prov_num fyear
+*list prov_num fyear dup *dt beds disch in 1/30
+list prov_num fyear  *dt beds disch cr_* if prov_num=="010146" | prov_num=="011302" | prov_num=="050091"
+*prov_num=="010146"
+
+*keep only the variables i want
+keep prov_num *ccn teaching urban own_* uncomp* dissh *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out fyear cr_*
+
+*manually correct data for the 3 hospitals
+replace fyear = 2015 if prov_num=="010146" & cr_start==mdy(9,25,2014)
+
+collapse (sum) tot* net* *days dischrg (mean) beds, by(prov_num fyear *ccn own* teaching dissh uncomp* urban)
+
+duplicates tag prov_num fyear, gen(dup)
+tab dup
+assert dup==0
+drop dup
 
 compress
 save hospcr_panel_2010_2016, replace

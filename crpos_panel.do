@@ -3,6 +3,8 @@
 loc dta /ifs/home/kimk13/VI/data
 cd `dta'/pos
 
+*---------------------------------
+*hospital POS panel data
 forval yr = 2011/2016 {
     use pos`yr', clear
     *keep hospitals
@@ -38,4 +40,4 @@ gen own_gv = gnrl_cntl_typ=="05" | gnrl_cntl_typ=="06" | gnrl_cntl_typ=="07"
 drop gnrl_cntl_typ
 
 compress
-save pos_panel, replace
+save pos_panel_hosp.dta, replace

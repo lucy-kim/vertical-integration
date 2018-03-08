@@ -12,12 +12,544 @@ rm(list = ls())
 
 library(ggplot2)
 library(zoo)
+library(plyr)
+source("~/Dropbox/Wharton/Research/Labor/code/summarySE.R")
+
+
 ```
+
+# Import PAC type-hospital-fy-condition level data
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/Medicare/hosp_fy_VI.csv")
+df <- subset(df, fy!=2008) # drop 2008 b/c it's only second half of 2008
+df$condition <- factor(df$condition, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+df$size <- factor(df$size, labels = c("30-100","101-300","301+"))
+
+df$cond2 <- factor(ifelse(df$condition!="Hip/Knee",1,2), labels = c("AMI, HF, PN", "Hip/Knee"))
+df$refhhi3[df$cond2=="Hip/Knee"] <- df$refhhi[df$cond2=="Hip/Knee"]
+```
+
+# Descriptive analysis of the trend
+
+## Trend in # discharges
+```{r}
+df.h <- ddply(df, .(provid,fy,size,condition), summarise, disch = mean(dischnum))
+
+df.h2 <- summarySE(df.h, measurevar="disch", groupvars=c("fy","condition"))
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.1) # move them .05 to the left and right
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h2, aes(x=fy, y=disch)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=disch-ci, ymax=disch+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,180)) +
+  scale_x_continuous(limits = c(2009,2016),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean total number of discharges in a hospital",
+       subtitle="By condition") +
+  theme_bw()
+ggsave("~/Dropbox/Research/VI/gph/dischnum.png", width = 15, height=15, units="cm")
+
+df.h3 <- summarySE(df.h, measurevar="disch", groupvars=c("size","fy","condition"))
+
+ggplot(df.h3, aes(x=fy, y=disch, colour=size)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=disch-ci, ymax=disch+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,320)) +
+  scale_x_continuous(limits = c(2009,2016),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean total number of discharges in a hospital",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/dischnum_bysize.png", width = 15, height=15, units="cm")
+```
+
+
+## Trend in share of discharges referred to PAC
+
+don't exclude 2008
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/Medicare/hosp_fy_VI.csv")
+df$condition <- factor(df$condition, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+df$size <- factor(df$size, labels = c("30-100","101-300","301+"))
+
+df$cond2 <- factor(ifelse(df$condition!="Hip/Knee",1,2), labels = c("AMI, HF, PN", "Hip/Knee"))
+df$refhhi3[df$cond2=="Hip/Knee"] <- df$refhhi[df$cond2=="Hip/Knee"]
+
+#create share of referrals
+df$shref <- 100*df$dischnum_pac / df$dischnum
+
+# create penalty pressure
+df$pnlt3 <- factor(ifelse(df$pnltr13==0, 1,ifelse(df$pnltr13 >0.0034,2,3)), labels = c("Not penalized", "Penalized, bottom half", "Penalized, top half"))
+# ddply(df, .(pnlt3), summarise, M=mean(pnltr13))
+```
+
+
+Mean share of referrals
+```{r}
+df.h2 <- summarySE(df, measurevar="shr", groupvars=c("pac","fy","condition"), na.rm=T)
+
+df.h3 <- subset(df.h2, pac=="SNF")
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=shr)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=shr-ci, ymax=shr+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,50)) +
+  scale_x_continuous(limits = c(2009,2016),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean percentage of hospital discharges referred to SNF",
+       subtitle="By condition") +
+  theme_bw()
+ggsave("~/Dropbox/Research/VI/gph/shref_SNF.png", width = 15, height=15, units="cm")
+
+df.h3 <- subset(df.h2, pac=="HHA" & fy >= 2011)
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=shr)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=shr-ci, ymax=shr+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,50)) +
+  scale_x_continuous(limits = c(2011,2016),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean percentage of hospital discharges referred to HHA",
+       subtitle="By condition") +
+  theme_bw()
+ggsave("~/Dropbox/Research/VI/gph/shref_HHA.png", width = 15, height=15, units="cm")
+
+# by size
+df.h4 <- summarySE(df.h, measurevar="shr", groupvars=c("pac","fy","condition","size"), na.rm=T)
+
+df.h3 <- subset(df.h4, pac=="SNF")
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=shr, colour=size)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=shr-ci, ymax=shr+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(0,50)) +
+  scale_x_continuous(limits = c(2008.8,2016.2),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean percentage of hospital discharges referred to SNF",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/shref_SNF_bysize.png", width = 15, height=15, units="cm")
+
+df.h3 <- subset(df.h4, pac=="HHA" & fy >= 2011)
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=shr, colour=size)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=shr-ci, ymax=shr+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(0,50)) +
+  scale_x_continuous(limits = c(2010.8,2016.2),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean percentage of hospital discharges referred to HHA",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/shref_HHA_bysize.png", width = 15, height=15, units="cm")
+
+```
+
+### growth of share of referrals by penalty
+```{r}
+df.h <- ddply(df, .(pac,provid,fy,pnlt3,condition), summarise, shref = mean(shref, na.rm=TRUE))
+# df.h <- ddply(df, .(pac,provid,fy,pnltr13_p75,condition), summarise, refhhi3 = mean(refhhi3, na.rm=TRUE))
+
+# calculate growth rate
+df.h <- df.h[order(df.h$pac,df.h$condition,df.h$provid,df.h$fy),]
+df.h2 <- ddply(df.h,.(pac, condition, provid),transform,
+         Growth=c(NA,exp(diff(log(shref)))-1))
+df.h2$Growth <- 100*df.h2$Growth
+df.h2$Growth[is.infinite(df.h2$Growth)] <- NA 
+summary(df.h2$Growth)
+
+# aggregate mean growth
+df.h3 <- summarySE(df.h2, measurevar="Growth", groupvars=c("pac","fy","condition","pnlt3"), na.rm=T)
+df.h3 <- subset(df.h3, is.na(pnlt3)==F)
+# df.h3$pnlt3 <- factor(df.h3$pnlt3, labels = c("Low penalty pressure", "High penalty pressure"))
+
+df.h4 <- subset(df.h3, pac=="SNF")
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=pnlt3)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  # scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2008.8,2016.2),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of SNF referral share (%)",
+       subtitle="By penalty rate in 2013") +
+  theme_bw(base_size=8) +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/grshref_SNF_bypnltprs.png", width = 15, height=15, units="cm")
+
+
+df.h4 <- subset(df.h3, pac=="HHA" & fy >= 2011)
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=pnlt3)) + facet_grid(condition~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  # scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2011,2016.2),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of HHA referral concentration (%)",
+       subtitle="By penalty rate in 2013 and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/grshref_HHA_bypnltprs.png", width = 15, height=15, units="cm")
+
+```
+
+
+## Trend in PAC referral concentration 
+plot raw means
+```{r}
+df.h <- ddply(df, .(pac,provid,fy,size,cond2), summarise, refhhi3 = mean(refhhi3, na.rm=TRUE))
+
+# aggregate mean growth
+df.h2 <- summarySE(df.h, measurevar="refhhi3", groupvars=c("pac","fy","cond2","size"), na.rm=T)
+
+df.h3 <- subset(df.h2, pac=="SNF")
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=refhhi3, colour=size)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=refhhi3-ci, ymax=refhhi3+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,0.5)) +
+  scale_x_continuous(limits = c(2009,2016),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean SNF referral concentration",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+    theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/refhhi3_SNF_bysize.png", width = 15, height=15, units="cm")
+
+df.h3 <- subset(df.h2, pac=="HHA" & fy >= 2011)
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=refhhi3, colour=size)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=refhhi3-ci, ymax=refhhi3+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,0.7)) +
+  scale_x_continuous(limits = c(2011,2016),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean HHA referral concentration",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/refhhi3_HHA_bysize.png", width = 15, height=15, units="cm")
+```
+
+
+### mean level by penalty status
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/Medicare/hosp_fy_VI.csv")
+# df <- subset(df, fy!=2008) # drop 2008 b/c it's only second half of 2008
+df$condition <- factor(df$condition, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
+df$size <- factor(df$size, labels = c("30-100","101-300","301+"))
+
+df$cond2 <- factor(ifelse(df$condition!="Hip/Knee",1,2), labels = c("AMI, HF, PN", "Hip/Knee"))
+df$refhhi3[df$cond2=="Hip/Knee"] <- df$refhhi[df$cond2=="Hip/Knee"]
+
+df$pnlt3 <- factor(ifelse(df$pnltr13==0, 1,ifelse(df$pnltr13 >0.0034,2,3)), labels = c("Not penalized", "Penalized, bottom half", "Penalized, top half"))
+# ddply(df, .(pnlt3), summarise, M=mean(pnltr13))
+
+df.h <- ddply(df, .(pac,provid,fy,pnlt3,cond2), summarise, refhhi3 = mean(refhhi3, na.rm=TRUE))
+# df.h <- ddply(df, .(pac,provid,fy,pnltr13_p75,cond2), summarise, refhhi3 = mean(refhhi3, na.rm=TRUE))
+
+# aggregate mean growth
+df.h2 <- summarySE(df.h, measurevar="refhhi3", groupvars=c("pac","fy","cond2","pnlt3"), na.rm=T)
+
+df.h3 <- subset(df.h2, pac=="SNF" & cond2!="Hip/Knee")
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=refhhi3, colour=pnlt3)) + 
+  # facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=refhhi3-ci, ymax=refhhi3+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(0,0.3)) +
+  scale_x_continuous(limits = c(2007.8,2016),
+                     breaks= seq(2008,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean SNF referral concentration for AMI, HF, PN",
+       subtitle="By penalty rate in 2013") +
+  theme_bw(base_size = 7) +
+    theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/refhhi3_SNF_bypnlt3_3c.png", width = 10, height=7, units="cm")
+
+df.h3 <- subset(df.h2, pac=="SNF" & cond2=="Hip/Knee")
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=refhhi3, colour=pnlt3)) + 
+  # facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=refhhi3-ci, ymax=refhhi3+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(0,0.5)) +
+  scale_x_continuous(limits = c(2007.8,2016),
+                     breaks= seq(2008,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean SNF referral concentration for HK",
+       subtitle="By penalty rate in 2013") +
+  theme_bw(base_size = 7) +
+    theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/refhhi3_SNF_bypnlt3_hk.png", width = 10, height=7, units="cm")
+
+
+df.h3 <- subset(df.h2, pac=="HHA" & fy >= 2011)
+
+# Use 95% confidence interval instead of SEM
+ggplot(df.h3, aes(x=fy, y=refhhi3, colour=pnlt3)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=refhhi3-ci, ymax=refhhi3+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,0.7)) +
+  scale_x_continuous(limits = c(2011,2016),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean HHA referral concentration",
+       subtitle="By penalty rate in 2013 and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/refhhi3_HHA_bypnlt3.png", width = 15, height=15, units="cm")
+```
+
+
+Plot growth rate
+```{r}
+# calculate growth rate
+df.h <- df.h[order(df.h$pac,df.h$cond2,df.h$provid,df.h$fy),]
+df.h2 <- ddply(df.h,.(pac, cond2, provid),transform,
+         Growth=c(NA,exp(diff(log(refhhi3)))-1))
+df.h2$Growth <- 100*df.h2$Growth
+df.h2$Growth[is.infinite(df.h2$Growth)] <- NA 
+summary(df.h2$Growth)
+
+# aggregate mean growth
+df.h3 <- summarySE(df.h2, measurevar="Growth", groupvars=c("pac","fy","cond2"), na.rm=T)
+
+df.h4 <- subset(df.h3, pac=="SNF")
+
+ggplot(df.h4, aes(x=fy, y=Growth)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,20)) +
+  scale_x_continuous(limits = c(2009,2016),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of SNF referral concentration (%)",
+       subtitle="By condition") +
+  theme_bw()
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_SNF.png", width = 15, height=15, units="cm")
+
+df.h4 <- subset(df.h3, pac=="HHA" & fy >= 2011)
+
+ggplot(df.h4, aes(x=fy, y=Growth)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(limits = c(0,20)) +
+  scale_x_continuous(limits = c(2011,2016),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of HHA referral concentration (%)",
+       subtitle="By condition") +
+  theme_bw()
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_HHA.png", width = 15, height=15, units="cm")
+
+
+# by size
+
+# aggregate mean growth
+df.h3 <- summarySE(df.h2, measurevar="Growth", groupvars=c("pac","fy","cond2","size"), na.rm=T)
+
+df.h4 <- subset(df.h3, pac=="SNF")
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=size)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2009,2016.2),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of SNF referral concentration (%)",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_SNF_bysize.png", width = 15, height=15, units="cm")
+
+df.h4 <- subset(df.h3, pac=="HHA" & fy >= 2011)
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=size)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2011,2016.2),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of HHA referral concentration (%)",
+       subtitle="By hospital size and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title="Hospital size (beds)"))
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_HHA.png", width = 15, height=15, units="cm")
+```
+
+### growth rate by penalty status
+```{r}
+df$pnlt3 <- factor(ifelse(df$pnltr13==0, 1,ifelse(df$pnltr13 >0.0034,2,3)), labels = c("Not penalized", "Penalized, bottom half", "Penalized, top half"))
+# ddply(df, .(pnlt3), summarise, M=mean(pnltr13))
+df.h <- ddply(df, .(pac,provid,fy,pnlt3,cond2), summarise, refhhi3 = mean(refhhi3, na.rm=TRUE))
+
+# calculate growth rate
+df.h <- df.h[order(df.h$pac,df.h$cond2,df.h$provid,df.h$fy),]
+df.h2 <- ddply(df.h,.(pac, cond2, provid),transform,
+         Growth=c(NA,exp(diff(log(refhhi3)))-1))
+df.h2$Growth <- 100*df.h2$Growth
+df.h2$Growth[is.infinite(df.h2$Growth)] <- NA 
+summary(df.h2$Growth)
+
+# aggregate mean growth
+df.h3 <- summarySE(df.h2, measurevar="Growth", groupvars=c("pac","fy","cond2","pnlt3"), na.rm=T)
+df.h3 <- subset(df.h3, is.na(pnlt3)==F)
+# df.h3$pnlt3 <- factor(df.h3$pnlt3, labels = c("Low penalty pressure", "High penalty pressure"))
+
+df.h4 <- subset(df.h3, pac=="SNF" & cond2!="Hip/Knee")
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=pnlt3)) + 
+  # facet_grid(pnlt3~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2008.8,2016.2),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of SNF referral concentration for AMI, HF, PN (%)",
+       subtitle="By penalty rate in 2013") +
+  theme_bw(base_size=8) +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_SNF_bypnltprs_3c.png", width = 10, height=7, units="cm")
+
+df.h4 <- subset(df.h3, pac=="SNF" & cond2=="Hip/Knee")
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=pnlt3)) + 
+  # facet_grid(pnlt3~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2008.8,2016.2),
+                     breaks= seq(2009,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of SNF referral concentration for HK (%)",
+       subtitle="By penalty rate in 2013") +
+  theme_bw(base_size=8) +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_SNF_bypnltprs_hk.png", width = 10, height=7, units="cm")
+
+
+df.h4 <- subset(df.h3, pac=="HHA" & fy >= 2011)
+
+ggplot(df.h4, aes(x=fy, y=Growth, colour=pnlt3)) + facet_grid(cond2~.) +
+  geom_errorbar(aes(ymin=Growth-ci, ymax=Growth+ci), width=.1, position=pd) +
+  geom_line(position=pd) +
+  geom_point(position=pd) +
+  scale_y_continuous(limits = c(-20,20)) +
+  scale_x_continuous(limits = c(2011,2016.2),
+                     breaks= seq(2011,2016,1)) +
+  labs(x="Fiscal Year ending in June", 
+       y="",
+       title="Mean growth of HHA referral concentration (%)",
+       subtitle="By penalty pressure and condition") +
+  theme_bw() +
+  theme(legend.position="bottom") +
+  guides(colour=guide_legend(title=""))
+ggsave("~/Dropbox/Research/VI/gph/grrefhhi3_HHA_bypnltprs.png", width = 15, height=15, units="cm")
+
+```
+
+## relationship b/w penalty pressure & referral hhi
+```{r}
+test <- subset(df, pac=="SNF" & condition=="Heart Failure" )
+table(test$fy)
+test$std_pnltprs <- scale(test$pnltprs)
+
+ggplot(test, aes(x=std_pnltprs, y=refhhi)) + facet_grid(fy~.) +
+  geom_smooth() 
+
+```
+
+
+
+
+
+
 
 ## Trend in VI by FY
 HHA
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
 # if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
@@ -46,7 +578,7 @@ ggsave("~/Dropbox/Research/VI/gph/hha_did2.png", width=15, height=10, units="cm"
 ## Trend in VI by quarters
 HHA
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_VI_HHA_qtradj2.csv")
 # if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
@@ -72,7 +604,7 @@ ggsave("~/Dropbox/Research/VI/gph/hha_did2.png", width=15, height=10, units="cm"
 
 SNF
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_VI_SNF_qtradj2.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_VI_SNF_qtradj2.csv")
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
 
@@ -112,7 +644,7 @@ ggsave("~/Dropbox/Research/VI/gph/snf_did2.png", width=15, height=10, units="cm"
 ## Trend in the share of referrals to PAC 
 HHA
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_shref_HHA_qtradj.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_shref_HHA_qtradj.csv")
 # if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
@@ -138,7 +670,7 @@ ggsave("~/Dropbox/Research/VI/gph/hha_did_shref.png", width=15, height=10, units
 
 SNF
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_shref_SNF_qtradj.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_shref_SNF_qtradj.csv")
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels=c("AMI", "Heart Failure", "Pneumonia", "Hip/Knee"))
 
@@ -163,7 +695,7 @@ ggsave("~/Dropbox/Research/VI/gph/snf_did_shref.png", width=15, height=10, units
 
 ## By the readmission risk, how did the readmission rate & integration change over time? 
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_DiD_qtr_iv_adj.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_qtr_iv_adj.csv")
 df <- subset(df, iv=="rblack")
 
 df$cond <- factor(df$cond, levels = c("AMI", "HF", "PN", "HK"), labels= c("AMI", "HF", "PN", "HK"))
@@ -356,7 +888,7 @@ ggsave("~/Dropbox/Research/VI/gph/pn_SNF_impact_bytop3rd.png", width=15, height=
 
 ## Do initial risk of factors predict the penalty ERRs?
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/penaltystatus_iv.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/penaltystatus_iv.csv")
 df$top3rd_rblack <- factor(df$top3rd_rblack)
 df$top3rd_rnonwhite <- factor(df$top3rd_rnonwhite)
 df$top3rd_rread30 <- factor(df$top3rd_rread30)
@@ -438,7 +970,7 @@ ggsave("~/Dropbox/Research/VI/gph/did_fy_refhhigr.png", width=15, height=10, uni
 
 Other conditions (Ami, PN, HF)
 ```{r}
-df  <- read.csv("/Users/kunheekim/Dropbox/Research/VI/data/DIDest/coef_DiD_fy_pnltprs_other.csv")
+df  <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_fy_pnltprs_other.csv")
 # if use coef_VI_HHA_qtradj.csv, data used for esitmation includes refHHI = 1 b/c dischnum_pac=1 
 
 df2 <- subset(df, y=="refhhi" & cond=="AMI")

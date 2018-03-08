@@ -11,215 +11,49 @@ loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-use hosp_fy_VI, clear
+use predict_pnltprs, clear
 
-*drop FY 2008 since only second half of the year available
-drop if fy==2008
+rename pred_pnltstatus_t2_err ppst
+rename pred_pnltrate_t2_err ppr
+rename pred_pnltdollar_t2_err ppd
 
-*drop Maryland hospitals
-gen str6 provid_str = string(provid, "%06.0f")
-gen st = substr(provid_str, 1,2)
-count if st=="21" | st=="80"
-*https://www.cms.gov/Regulations-and-Guidance/Guidance/Transmittals/downloads/R29SOMA.pdf
-drop if st=="21"
+keep if matched==1
 
-keep if pac=="SNF"
+table fy if cond=="AMI", content(mean penalized_t2 mean pnltrate_t2 mean pnltdollar_t2)
+table fy if cond=="AMI", content(mean ppst mean ppr mean ppd)
 
-drop if beds==.
-* 18 hospitals
-
-duplicates tag pac cond provid fy, gen(dup)
-assert dup==0
-drop dup
-
-*restrict to hospital-conditions whose mean # referrals to SNF over 2009-2011 is at least 15
-capture drop mdischnum_pac x
-bys provid cond: egen x = mean(dischnum_pac) if fy < 2012
-bys provid cond: egen mdischnum_pac = max(x)
-tab cond fy if mdischnum_pac > 15
-sort provid cond fy
-list provid cond fy dischnum_pac mdisch in 100/200
-
-*restrict to hospital-conditions whose mean # discharges over 2009-2011 is at least 25
-capture drop x
-bys provid cond: egen x = mean(dischnum) if fy < 2012
-bys provid cond: egen mdischnum = max(x)
-tab cond fy if mdischnum > 25
-
-*drop small hospitals whose min # bed < 30
-capture drop x
-bys provid: egen x = min(beds)
-tab cond fy if x >= 30
-drop if x < 30
-
-*also restrict to hospitals that appeared throught 2008-2016
-capture drop x
-gen x = dischnum > 0
-bys provid cond: egen sx = sum(x)
-tab sx
-tab cond fy if sx < 8
-
-keep if mdischnum_pac >= 15 & sx==8 & mdischnum >= 25
-drop sx mdischnum_pac mdischnum
-
-tab cond fy
-
-*drop hospital-conditions if # referrals==1 or 0 for any one of the years
-capture drop x
-bys pac cond provid: egen x = min(dischnum_pac)
-tab x
-tab provid if x < 2
-sort provid cond fy
-list provid cond fy dischnum_pac if provid==140034
-drop if x < 2
-
-*referral HHI should be missing, not zero, if dischnum_pac = 0
-replace refhhi = . if dischnum_pac==0
-
-*create size of Medicare payment for each hospital-fy t where t = 2012, 2013, ... using the sum of Medicare payment for the period {t-3, t-2, t-1}
-capture drop x
-foreach v of varlist mcr_pmt tot_pat_rev {
-  capture drop x_`v'
-  gen x_`v' = .
-  forval t = 2009 /2016 {
-    loc fy = `t'-3
-    loc ly = `t'-1
-    bys cond provid: egen x = sum(`v') if fy >= `fy' & fy <= `ly'
-    bys cond provid: egen mx = max(x)
-    replace x_`v' = mx if fy==`t'
-    drop x mx
-  }
-  assert x_`v'!=. if fy >= 2011
+*for pre-years, recode predicted penalty rate to 0
+loc int 2012
+foreach v of varlist ppst ppr ppd {
+  replace `v' = 0 if fy <  & `v'==.
 }
-rename x_mcr_pmt deptsize
-rename x_tot_pat_rev totpatrev
+table fy if cond=="AMI", content(mean ppst mean ppr mean ppd)
 
-sort cond provid fy
-list cond provid fy mcr_pmt tot_pat_rev deptsize totpatrev in 1/30
+replace ppd = ppd*100000
 
-*get risk-standardized readmissions rate (RSRR) for each t := max[0, ERR-1] where ERR corresponds to ERR for t+1 based on {t-3,t-2,t-1}, e.g. RSRR for 2012 should be ERR for 2013 which is based on the base period 2009-2011
-
-*let's remerge with penalty rate data after reshape wide the penalty rate
-preserve
-use `dta'/hrrp_penalty, clear
-reshape wide payadjr pnltr n_* err_* , i(provid) j(fy)
-tempfile penalty
-save `penalty'
-restore
-
-drop payadjr-pnltr
-merge m:1 provid using `penalty', keep(1 3) nogen
-
-
-foreach c in "ami" "hf" "hk" "pn" {
-  loc v err_`c'
-  capture drop `v'
-  gen `v' = .
-  gen `v'2 = .
-  gen penalized_`c'_t2 = .
-  gen act_pnltr_`c'_t2 = .
-
-  * in 2012, look at own performance during {2009-2011} (used for 2013 penalty)
-  forval t = 2011/2016 {
-    loc t2 =`t'+1
-    di `t2'
-    gen pos = `v'`t2' > 1 & pnltr`t2' > 0
-    replace `v' = (`v'`t2'-1)*pos if fy==`t'
-    replace `v'2 = (`v'`t2'-1) if fy==`t'
-    replace penalized_`c'_t2 = pos if fy==`t'
-    replace act_pnltr_`c'_t2 = pnltr`t2' if fy==`t'
-    drop pos
-  }
-}
-rename err_ami pnlt_AMI_rate
-rename err_pn pnlt_PN_rate
-rename err_hf pnlt_HF_rate
-rename err_hk pnlt_HK_rate
-
-rename err_ami2 pnlt_AMI_rate2
-rename err_pn2 pnlt_PN_rate2
-rename err_hf2 pnlt_HF_rate2
-rename err_hk2 pnlt_HK_rate2
-
-sort cond provid fy
-list cond provid fy deptsize totpatrev pnlt_AMI_rate in 1/30
-list cond provid fy pnlt_AMI_rate err_ami* n_ami* in 1/10
-
-sort provid fy cond
-list provid fy cond deptsize totpatrev pnlt_AMI_rate in 1/30
-
-*calculate the dollar size of penalty for each condition
-gen pnlt_rate_c = .
-gen pnlt_rate_c2 = .
-foreach c in "AMI" "HF" "HK" "PN" {
-  replace pnlt_rate_c = pnlt_`c'_rate if cond=="`c'"
-  drop pnlt_`c'_rate
-
-  replace pnlt_rate_c2 = pnlt_`c'_rate2 if cond=="`c'"
-  drop pnlt_`c'_rate2
-}
-gen pnlt_dollar_c = deptsize * pnlt_rate_c
-
-*gen sh_pmt = (mcr_pmt/tot_pat_rev)
-
-compress
-save penalty_VI_bycond, replace
-
-tempfile an
-save `an'
-*--------------------------------
-
-* regress the referral concentration on hospital FE, penalty pressure, fiscal year FE
-use penalty_VI_bycond, clear
-loc int 2011
-
-drop if cond=="HK"
-
-
-foreach v of varlist pnlt_dollar_c pnlt_rate_c pnlt_rate_c2 {
-  replace `v' = 0 if fy < `int'
+foreach v of varlist ppd {
+  gen l`v' = ln(`v' + 1)
 }
 
-* use the 2012 readmissions penalty pressure as influence of penalty
-foreach v of varlist pnlt_rate_c pnlt_rate_c2 pnlt_dollar_c deptsize {
-  capture drop `v'`int'
+*use the predicted penalty likelihood, rate, dollar amounts as key indep vars in the regression
+
+* 1) cross-sectional variation: use the 2012 readmissions penalty pressure based on 2009-2011 performance
+foreach v of varlist ppst ppr lppd  {
   capture drop x
   gen x = `v' if fy==`int'
   bys cond provid: egen `v'`int' = max(x)
 }
 
-gen penalized2013 = pnltr2013 > 0
-bys penalized2013: sum beds dischnum dischnum_pac
-
-
-foreach v of varlist dischnum_pac pnlt_dollar_c* deptsize* {
-  gen ln_`v' = ln(`v' + 1)
-}
-
+*char fy[omit] 2016
 xi i.fy
 gen post = fy >=`int'
 
-gen pnlt_rate_cXlndeptsize`int' = pnlt_rate_c`int' * ln_deptsize`int'
-gen pnlt_rate_c2Xlndeptsize`int' = pnlt_rate_c2`int' * ln_deptsize`int'
+*interaction of penalty pressure and post period indicators
+local lppst`int' "Predicted likelihood of penalty in `int'"
+local lppr`int' "Predicted penalty rate in `int'"
+local llppd`int' "Log Predicted penalty amount ($) in `int'"
 
-tab fy , summarize(pnlt_rate_cXlndeptsize`int')
-tab fy , summarize(pnlt_rate_c2Xlndeptsize`int')
-
-lab var pnlt_rate_c`int' "Predicted `int' excess readmission rate"
-lab var pnlt_rate_c2`int' "Predicted `int' risk-adjusted readmission rate"
-lab var ln_deptsize`int' "Predicted `int' Ln(Medicare revenues for condition)"
-lab var pnlt_rate_cXlndeptsize`int' "Predicted `int' risk-adjusted readmission rate X Ln(Medicare revenues)"
-lab var ln_pnlt_dollar_c`int' "Predicted `int' Ln(expected penalty ($))"
-loc lln_pnlt_dollar_c`int' "Ln(Predicted `int' penalty ($))"
-loc lpnlt_rate_c`int' "Predicted `int' excess readmission rate"
-loc lln_deptsize`int' "Predicted `int' Ln(Medicare revenues for condition)"
-loc lpnlt_rate_cXlndeptsize`int' "Predicted `int' excess readmission rate X Ln(Medicare revenues for condition)"
-loc lpnlt_rate_c2`int' "Predicted `int' risk-adjusted readmission rate"
-loc lln_deptsize`int' "Predicted `int' Ln(Medicare revenues for condition)"
-loc lpnlt_rate_c2Xlndeptsize`int' "Predicted `int' risk-adjusted readmission rate X Ln(Medicare revenues for condition)"
-
-*cross-sectional variation across hospitals by `int' penalty pressure based on 2009-2011 performance
-foreach v of varlist ln_pnlt_dollar_c`int' pnlt_rate_c`int' pnlt_rate_c2`int' ln_deptsize`int' pnlt_rate_cXlndeptsize`int' pnlt_rate_c2Xlndeptsize`int' {
+foreach v of varlist ppst`int' ppr`int' lppd`int' {
   tab fy, summarize(`v')
 
   capture drop `v'Xpost
@@ -233,447 +67,353 @@ foreach v of varlist ln_pnlt_dollar_c`int' pnlt_rate_c`int' pnlt_rate_c2`int' ln
   }
 }
 
-gen nonbw = dischnum - white - black
-gen rblack = black / dischnum
-gen rnonbw = nonbw / dischnum
-foreach v of varlist ses_score rblack rnonbw {
-  capture drop `v'Xpost
-  gen `v'Xpost = `v'*post
-  forval t=2010/2016 {
-    capture drop `v'X`t'
-    gen `v'X`t' = `v'*_Ify_`t'
-  }
-}
+lab var ppst "Predicted likelihood of penalty"
+lab var ppr "Predicted penalty rate"
+lab var ppd "Predicted penalty amount ($)"
+lab var lppd "Log Predicted penalty amount ($)"
+
+lab var ppst`int' "Predicted likelihood of penalty in `int'"
+lab var ppr`int' "Predicted penalty rate in `int'"
+lab var lppd`int' "Log Predicted penalty amount ($) in `int'"
 
 * create share of SNF referrals outcome
 gen shref = dischnum_pac/dischnum
 
-*create de
+*create quintiles of # beds
 preserve
-keep provid fy beds dischnum
+keep provid fy beds
 duplicates drop
-sum beds dischnum, de
+sum beds, de
+xtile gp_beds = beds, n(10)
+tab gp_beds, summarize(beds)
+drop beds
+tempfile gp_beds
+save `gp_beds'
 restore
+
+merge m:1 provid fy using `gp_beds', keep(1 3) nogen
+
+gen hrrhhi_SNF = .
+foreach c in "AMI" "HF" "PN" {
+  replace hrrhhi_SNF = hrrhhi_SNF_`c' if cond=="`c'"
+  drop hrrhhi_SNF_`c'
+}
+
+tempfile tmp
+save `tmp'
+
+*get indicators for top quartlie & middle 2 quartiles
+use `tmp', clear
+keep cond provid ppst`int' ppr`int' lppd`int'
+duplicates drop
+foreach pp of varlist ppst`int' ppr`int' lppd`int' {
+  bys cond: egen x_p75_`pp' = pctile(`pp'), p(75)
+  bys cond: egen x_p25_`pp' = pctile(`pp'), p(25)
+  gen p75_`pp' = `pp' > x_p75_`pp'
+  gen p25_75_`pp' = `pp' > x_p25_`pp' & `pp' <= x_p75_`pp'
+}
+drop x_* ppst ppr lppd
+tempfile quartiles
+save `quartiles'
+
+use `tmp', clear
+merge m:1 cond provid using `quartiles', keep(1 3) nogen
+
+*create indicators for the top quartile, middle 2 quatiles in the penalty pressure
+foreach pp of varlist ppst`int' ppr`int' lppd`int' {
+  forval t=2010/2016 {
+    gen p75_`pp'X`t' = p75_`pp' * _Ify_`t'
+    lab var p75_`pp'X`t' "Top quartile in `l`pp'' X `t'"
+    gen p25_75_`pp'X`t' = p25_75_`pp' * _Ify_`t'
+    lab var p25_75_`pp'X`t' "Middle 2 quartiles in `l`pp'' X `t'"
+  }
+  gen p75_`pp'Xpost = p75_`pp' * post
+  gen p25_75_`pp'Xpost = p25_75_`pp' * post
+  lab var p75_`pp'Xpost "Top quartile X Post"
+  lab var p25_75_`pp'Xpost "Middle 2 quartiles X Post"
+}
+des p75* p25_75*
+
+tab fy, summarize(p75_ppst`int'Xpost)
+
+*create laggeed formally owning SNF
+preserve
+use hosp_fy_VI, clear
+keep if pac=="SNF"
+sort cond provid fy
+bys cond provid: gen vi_snf_l = vi_snf[_n-1]
+tab fy, summarize(vi_snf_l)
+lab var vi_snf_l "Owns SNF, lagged"
+keep cond provid fy vi_snf_l
+duplicates drop
+tempfile vi_snf_l
+save `vi_snf_l'
+restore
+
+merge 1:1 cond provid fy using `vi_snf_l', keep(1 3) nogen
+tab fy, summarize(vi_snf_l)
+
+lab var vi_snf "Formally owns SNF"
+lab var hrrhhi_SNF "SNF market concentration"
+lab var urban "Urban"
+lab var teaching "Teaching"
+lab var own_fp "For profit"
+lab var own_np "Not for profit"
+lab var own_gv "Government owned"
 
 tempfile an
 save `an'
 
-*--------------------------------
-*match penalized hospitals with non-penalized hospitals
-*use the sample of hospitals that were penalized & regress the penalty rate in 2013 on baseline hospital characteristics
-use `an', clear
+* regress the referral concentration on hospital FE, penalty pressure, fiscal year FE
 
-foreach v of varlist beds dischnum {
-  gen ln_`v' = log(`v' + 1)
-}
-
-*use 2009 hosp chars for baseline chars
-foreach v of varlist ln_beds ln_dischnum ln_dischnum_pac teaching urban own* vi_snf {
-  capture drop x
-  gen x = `v' if fy==2009
-  bys provid cond: egen `v'2009 = max(`v')
-}
-
-loc hospchars *2009
-keep cond pnlt_rate_c2011 `hospchars' provid penalized2013
-duplicates drop
-count
-
-tempfile an2
-save `an2'
-
-foreach c in "AMI" "HF" "PN" {
-  use `an2', clear
-  keep if cond=="`c'"
-
-  *get deciles of volume with unique hospital-level obs
-  foreach v of varlist ln_beds2009 ln_dischnum2009 ln_dischnum_pac2009 {
-    sum `v', de
-    xtile gp_`v' = `v', n(10)
-  }
-
-  gen penalized_`c' = pnlt_rate_c2011 > 0 & penalized2013 > 0
-
-  *regress the penalty rate in 2013 on baseline hospital characteristics using the penalized hospitals for that condition
-  *betafit pnlt_rate_c2011 if penalized_`c'==1, mu(`hospchars' )
-  loc hospchars teaching2009 urban2009 own*2009 vi_snf2009 i.gp_ln_beds2009 i.gp_ln_dischnum2009 i.gp_ln_dischnum_pac2009
-  glm pnlt_rate_c2011 `hospchars' if penalized_`c'==1, family(binomial) link(logit) vce(robust) nolog
-
-  *logit pnlt_rate_c2011 `hospchars' if penalized_`c'==1
-  *pscore penalized_`c' `hospchars', pscore(mypscore) numblo(5) level(0.005) logit comsup
-  *psmatch2 penalized_`c', outcome(pcs) pscore(mypscore) neighbor(1)
-
-  *generate predicted penalty shocks for the full sample of hospitals
-  predict ppnlt_rate_c2011_`c'
-
-  tempfile predicted
-  save `predicted'
-
-  *find the nearest matched hospital based on the predicted penalty shock based on baseline characteristics
-
-  *want to create hospital pair data where a penalized hosp is paired with a non-penalized hosp
-  use `predicted', clear
-  keep provid
-  duplicates drop
-  rename provid provid1
-  gen provid2 = provid
-  fillin provid1 provid2
-
-  *drop if paired with itself
-  drop if _f==0
-
-  rename provid1 provid
-  merge m:1 provid using `predicted', keepusing(penalized_`c' ppnlt_rate_c2011_`c') nogen
-  rename ppnlt_rate_c2011_`c' ppnlt_rate_c2011_`c'1
-  rename penalized_`c' treat1
-  rename provid provid1
-  drop if treat1==0
-
-  rename provid2 provid
-  merge m:1 provid using `predicted', keepusing(penalized_`c' ppnlt_rate_c2011_`c') nogen
-  rename ppnlt_rate_c2011_`c' ppnlt_rate_c2011_`c'2
-  rename penalized_`c' treat2
-  rename provid provid2
-  drop if treat2==1
-
-  *calculate difference
-  sort provid1 provid2
-  gen diff = abs(ppnlt_rate_c2011_`c'1 - ppnlt_rate_c2011_`c'2)
-  bys provid1: egen mindiff = min(diff)
-  gen nearest = diff==mindiff
-
-  *is the pair unique?
-  duplicates tag provid2 if nearest==1, gen(dup)
-  tab dup
-  *no
-
-  keep if nearest==1
-
-  *reshape long
-  preserve
-  keep provid2
-  rename provid2 provid
-  tempfile control
-  save `control'
-  restore
-
-  keep provid1
-  rename provid1 provid
-  append using `control'
-
-  merge m:1 provid using `predicted'
-  *137 hospitals drop out
-  keep if _m==3
-  drop _m
-
-  *let's calculate the inverse probability of a hospital to be matched as a control group (i.e. nonpenalized)
-  gen n = _N
-  bys provid: gen smpld = _N
-  gen prob = smpld / n
-  duplicates drop
-  gen invpr = 1/prob
-
-  keep provid invpr cond
-  tempfile `c'
-  save ``c''
-}
-
-*---------------------
-*keep only the matched control hospitals among non-penalized ones
-clear
-foreach c in "AMI" "HF" "PN" {
-  append using ``c''
-}
-
-merge 1:m provid cond using `an'
-tab cond fy if _m==2
-keep if _m==3
-drop _m
-
-compress
-save penalty_VI_bycond2, replace
-
-*--------------------------------
-* create 2 more outcomes: % of previous SNFs getting referrals, % HRR-level SNFs getting referrals,
-
-use penalty_VI_bycond2, clear
-
-use PACreferral_tchpm, clear
-keep if
 
 *---------------------------
-*use the cross-sectional variation across hospitals by `int' penalty pressure based on 2009-2011 performance
+*use the cross-sectional variation across hospitals by  penalty pressure based on 2009-2011 performance
 
-*use pre-HRRP excess readmission rate & excess readmission rate X condition revenue size as penalty pressure
-foreach y of varlist refhhi {
-  loc file ols_`y'1
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
+loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
 
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    areg `y' pnlt_rate_c`int'X20* i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-
-    areg `y' pnlt_rate_c`int'X20* ln_deptsize`int'X20* pnlt_rate_cXlndeptsize`int'X20* i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-  }
-
+foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_used shref {
   * use post dummy
-  loc file ols_`y'1.2
+  loc file ols_`y'_cs_post
   capture erase `reg'/`file'.xls
   capture erase `reg'/`file'.txt
   capture erase `reg'/`file'.tex
 
   foreach c in "AMI" "HF" "PN" {
+    *xtile gp_dischnum=dischnum, n(5)
+
     di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
 
-    areg `y' pnlt_rate_c`int'Xpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
+    loc file ols_`y'_cs_post
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
 
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
+    foreach pp of varlist ppst`int' ppr`int' lppd`int' {
+      use `an', clear
+      keep if cond=="`c'"
+      table fy, contents(mean ppst`int' mean ppr`int' mean lppd`int')
 
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
+      gen p75_pnltprsXpost = p75_`pp'Xpost
+      lab var p75_pnltprsXpost "Top quartile X Post"
+      gen p25_75_pnltprsXpost = p25_75_`pp'Xpost
+      lab var p25_75_pnltprsXpost "Middle 2 quartiles X Post"
+      gen pnltprsXpost = `pp'Xpost
+      lab var pnltprsXpost "Penalty pressure X Post"
+      tab fy, summarize(p75_pnltprsXpost)
 
-    areg `y' pnlt_rate_c`int'Xpost ln_deptsize`int'Xpost pnlt_rate_cXlndeptsize`int'Xpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
+      *loc pnltprs pnltprsXpost
+      loc pnltprs p75_pnltprsXpost p25_75_pnltprsXpost
+      areg `y' `pnltprs' _Ify_* `sp', absorb(provid) cluster(provid)
 
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
+      *mean dep var
+      sum `y' if e(sample)
+      loc mdv: display %9.3f `r(mean)'
 
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+    }
   }
 
-  *use penalty in dollars
-  loc file ols_`y'2
+  *use FY indicators
+  loc file ols_`y'_cs_fy
   capture erase `reg'/`file'.xls
   capture erase `reg'/`file'.txt
   capture erase `reg'/`file'.tex
 
   foreach c in "AMI" "HF" "PN" {
     di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
 
-    areg `y' ln_pnlt_dollar_c`int'X20* i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
 
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
+    foreach pp of varlist ppst`int' ppr`int' lppd`int' {
+      use `an', clear
+      keep if cond=="`c'"
 
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
+      forval t = 2010/2016 {
+        gen p75_pnltprsX`t' = p75_`pp'X`t'
+        lab var p75_pnltprsX`t' "Top quartile X `t'"
+        gen p25_75_pnltprsX`t' = p25_75_`pp'X`t'
+        lab var p25_75_pnltprsX`t' "Middle 2 quartiles X `t'"
+        gen pnltprsX`t' = `pp'X`t'
+        lab var pnltprsX`t' "Penalty pressure X `t'"
+      }
 
-    areg `y' ln_pnlt_dollar_c`int'X20* i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
+      *loc pnltprs pnltprsX20*
+      loc pnltprs p75_pnltprsX20* p25_75_pnltprsX20*
+      areg `y' `pnltprs' _Ify_* `sp', absorb(provid) cluster(provid)
 
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
+      *mean dep var
+      sum `y' if e(sample)
+      loc mdv: display %9.3f `r(mean)'
 
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-  }
-
-  * use post dummy
-  loc file ols_`y'2.2
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    areg `y' ln_pnlt_dollar_c`int'Xpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-
-    areg `y' ln_pnlt_dollar_c`int'Xpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+    }
   }
 }
+
 
 
 
 *---------------------------
 *use both cross-hospital & within-hospital cross-time variation in penalty pressure
 use `an', clear
-foreach v of varlist ln_pnlt_dollar_c pnlt_rate_c ln_deptsize {
-  replace `v' = 0 if fy < `int'
-  tab fy, summarize(`v')
+
+*get indicators for top quartlie & middle 2 quartiles
+foreach pp of varlist ppst ppr lppd {
+  bys cond fy: egen x_p75_`pp' = pctile(`pp'), p(75)
+  bys cond fy: egen x_p25_`pp' = pctile(`pp'), p(25)
+  gen p75_`pp' = `pp' > x_p75_`pp'
+  gen p25_75_`pp' = `pp' > x_p25_`pp' & `pp' <= x_p75_`pp'
+}
+drop x_*
+
+tab fy, summarize(p75_ppst)
+
+local lppst "Predicted likelihood of penalty"
+local lppr "Predicted penalty rate"
+local llppd "Log Predicted penalty amount ($)"
+
+*create interaction terms with indicators for the top quartile, middle 2 quatiles in the penalty pressure and post indicators
+foreach pp of varlist ppst ppr lppd {
+  forval t=2010/2016 {
+    gen p75_`pp'X`t' = p75_`pp' * _Ify_`t'
+    lab var p75_`pp'X`t' "Top quartile in `l`pp'' X `t'"
+    gen p25_75_`pp'X`t' = p25_75_`pp' * _Ify_`t'
+    lab var p25_75_`pp'X`t' "Middle 2 quartiles in `l`pp'' X `t'"
+    gen `pp'X`t' = `pp' * _Ify_`t'
+    lab var `pp'X`t' "`l`pp'' X `t'"
+  }
+  gen p75_`pp'Xpost = p75_`pp' * post
+  gen p25_75_`pp'Xpost = p25_75_`pp' * post
+  lab var p75_`pp'Xpost "Top quartile X Post"
+  lab var p25_75_`pp'Xpost "Middle 2 quartiles X Post"
+  gen `pp'Xpost = `pp' * post
+  lab var `pp'Xpost "`l`pp'' X Post"
+}
+des p75* p25_75*
+
+lab var ppst "Predicted likelihood of penalty"
+lab var ppr "Predicted penalty rate"
+lab var ppd "Predicted penalty amount ($)"
+lab var lppd "Log Predicted penalty amount ($)"
+
+tempfile an2
+save `an2'
+
+foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_used shref {
+  * use post dummy
+  loc file ols_`y'_ts_post
+  capture erase `reg'/`file'.xls
+  capture erase `reg'/`file'.txt
+  capture erase `reg'/`file'.tex
+
+  foreach c in "AMI" "HF" "PN" {
+    *xtile gp_dischnum=dischnum, n(5)
+
+    di "Condition `c'------------------------"
+
+    loc file ols_`y'_ts_post
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
+    loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
+
+    foreach pp of varlist ppst ppr lppd {
+      use `an2', clear
+      keep if cond=="`c'"
+
+      gen p75_pnltprsXpost = p75_`pp'Xpost
+      lab var p75_pnltprsXpost "Top quartile X Post"
+      gen p25_75_pnltprsXpost = p25_75_`pp'Xpost
+      lab var p25_75_pnltprsXpost "Middle 2 quartiles X Post"
+      gen pnltprsXpost = `pp'Xpost
+      lab var pnltprsXpost "Penalty pressure X Post"
+
+      loc pnltprs pnltprsXpost
+      *loc pnltprs p75_pnltprsXpost p25_75_pnltprsXpost
+      areg `y' `pnltprs' _Ify_* `sp', absorb(provid) cluster(provid)
+
+      *mean dep var
+      sum `y' if e(sample)
+      loc mdv: display %9.3f `r(mean)'
+
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+    }
+  }
+
+  *use FY indicators
+  loc file ols_`y'_ts_fy
+  capture erase `reg'/`file'.xls
+  capture erase `reg'/`file'.txt
+  capture erase `reg'/`file'.tex
+
+  foreach c in "AMI" "HF" "PN" {
+    di "Condition `c'------------------------"
+
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
+    loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
+
+    foreach pp of varlist ppst ppr lppd {
+      use `an2', clear
+      keep if cond=="`c'"
+
+      forval t = 2010/2016 {
+        gen p75_pnltprsX`t' = p75_`pp'X`t'
+        lab var p75_pnltprsX`t' "Top quartile X `t'"
+        gen p25_75_pnltprsX`t' = p25_75_`pp'X`t'
+        lab var p25_75_pnltprsX`t' "Middle 2 quartiles X `t'"
+        gen pnltprsX`t' = `pp'X`t'
+        lab var pnltprsX`t' "Penalty pressure X `t'"
+      }
+
+      loc pnltprs pnltprsX20*
+      *loc pnltprs p75_pnltprsX20* p25_75_pnltprsX20*
+      areg `y' `pnltprs' _Ify_* `sp', absorb(provid) cluster(provid)
+
+      *mean dep var
+      sum `y' if e(sample)
+      loc mdv: display %9.3f `r(mean)'
+
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+    }
+  }
 }
 
-gen pnlt_rate_cXlndeptsize =  pnlt_rate_c * ln_deptsize
-gen ln_pnlt_dollar_cXlndeptsize =  ln_pnlt_dollar_c * ln_deptsize
 
-lab var ln_pnlt_dollar_cXlndeptsize "Predicted penalty ($) X Ln(Medicare revenues for condition)"
-lab var pnlt_rate_cXlndeptsize "Predicted penalty rate X Ln(Medicare revenues for condition)"
-lab var pnlt_rate_c "Predicted penalty rate"
-lab var pnlt_rate_c2 "Predicted risk-adjusted readmission rate"
-lab var ln_deptsize "Predicted Ln(Medicare revenues for condition)"
-lab var pnlt_rate_cXlndeptsize "Predicted risk-adjusted readmission rate X Ln(Medicare revenues for condition)"
-lab var ln_pnlt_dollar_c "Ln(Predicted penalty ($))"
+*---------------------------
+* IV regression
 
-loc lln_pnlt_dollar_c "Ln(Predicted penalty ($))"
-loc lpnlt_rate_c "Predicted excess readmission rate"
-loc lln_deptsize "Predicted Ln(Medicare revenues for condition)"
-loc lpnlt_rate_cXlndeptsize "Predicted excess readmission rate X Ln(Medicare revenues for condition)"
-loc lpnlt_rate_c2 "Predicted risk-adjusted readmission rate"
-loc lln_deptsize "Predicted Ln(Medicare revenues for condition)"
-loc lpnlt_rate_c2Xlndeptsize "Predicted risk-adjusted readmission rate X Ln(Medicare revenues for condition)"
-loc lln_pnlt_dollar_cXlndeptsize "Predicted penalty ($) X Ln(Medicare revenues for condition)"
+use hosp_fy_VI, clear
+keep if fy ==2008
+gen rblack = black / dischnum
+keep provid cond ses_score rblack dissh uncomp1
+duplicates drop
+foreach v of varlist ses_score rblack dissh uncomp1 {
+  ren `v' `v'08
+}
+tempfile iv08
+save `iv08'
 
+use `an2', clear
+merge m:1 provid cond using `iv08', keep(1 3) nogen
 
-foreach v of varlist ln_pnlt_dollar_c pnlt_rate_c ln_deptsize pnlt_rate_cXlndeptsize ln_pnlt_dollar_cXlndeptsize {
+foreach v of varlist ses_score08 rblack08 dissh08 uncomp108 {
   capture drop `v'Xpost
   gen `v'Xpost = `v'*post
-  lab var `v'Xpost "`l`v'' X Post"
-
   forval t=2010/2016 {
     capture drop `v'X`t'
     gen `v'X`t' = `v'*_Ify_`t'
-    lab var `v'X`t' "`l`v'' X `t'"
-  }
-}
-tab fy, summarize(ln_pnlt_dollar_c)
-
-
-*use pre-HRRP excess readmission rate & excess readmission rate X condition revenue size as penalty pressure
-foreach y of varlist refhhi shref {
-  loc file ols_`y'3
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    loc xvar pnlt_rate_cX`int' pnlt_rate_cX2013 pnlt_rate_cX2014 pnlt_rate_cX2015 pnlt_rate_cX2016
-    areg `y' `xvar' i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-
-    loc xvar pnlt_rate_cX2012 pnlt_rate_cX2013 pnlt_rate_cX2014 pnlt_rate_cX2015 pnlt_rate_cX2016 ln_deptsizeX2012 ln_deptsizeX2013 ln_deptsizeX2014 ln_deptsizeX2015 ln_deptsizeX2016 pnlt_rate_cXlndeptsizeX2012 pnlt_rate_cXlndeptsizeX2013 pnlt_rate_cXlndeptsizeX2014 pnlt_rate_cXlndeptsizeX2015 pnlt_rate_cXlndeptsizeX2016
-    areg `y' `xvar' i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-  }
-
-  * use post dummy
-  loc file ols_`y'3.2
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    areg `y' pnlt_rate_cXpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-
-    areg `y' pnlt_rate_cXpost ln_deptsizeXpost pnlt_rate_cXlndeptsizeXpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-  }
-
-  *use penalty in dollars
-  loc file ols_`y'4
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    loc xvar ln_pnlt_dollar_cX2012 ln_pnlt_dollar_cX2013 ln_pnlt_dollar_cX2014 ln_pnlt_dollar_cX2015 ln_pnlt_dollar_cX2016
-    areg `y' `xvar' i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
-  }
-
-  * use post dummy
-  loc file ols_`y'4.2
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-
-  foreach c in "AMI" "HF" "PN" {
-    di "Condition `c'------------------------"
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c')"
-    loc sp i.size ln_dischnum_pac own_* urban teaching vi_snf hrrhhi_SNF_`c'
-
-    areg `y' ln_pnlt_dollar_cXpost i.fy `sp' if cond=="`c'" , absorb(provid) cluster(provid)
-
-    *mean dep var
-    sum `y' if e(sample)
-    loc mdv: display %9.4f `r(mean)'
-
-    `out' addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(4) fmt(fc)
   }
 }
 
-*---------
+compress
+save penalty_VI_bycond, replace
 
-
+loc ivpost ses_score08Xpost rblack08Xpost dissh08Xpost uncomp108Xpost
+loc ivpost ses_score08Xpost rblack08Xpost dissh08Xpost uncomp108Xpost
 
 *first stage
 foreach c in "PN" {
   di "Condition `c'------------------------"
-  foreach v of varlist ln_pnlt_dollar_c pnlt_rate_c {
-    loc y `v'Xpost
-    areg `y' ses_scoreXpost rblackXpost i.fy i.size ln_dischnum_pac own_* urban teaching vi_snf if cond=="`c'" & fy < 2015, cluster(provid) absorb(provid)
+  foreach pp of varlist ppst ppr lppd {
+    loc y `pp'Xpost
+    areg `y' `iv' _Ify_* `sp' if cond=="`c'", cluster(provid) absorb(provid)
     test
   }
 }
@@ -681,8 +421,18 @@ foreach c in "PN" {
 loc y refhhi
 foreach c in "PN" {
   di "Condition `c'------------------------"
+  foreach pp of varlist ppst ppr lppd {
+    ivreg2 `y' _Ify_* `sp' i.provid (`pp'Xpost = `ivpost') if cond=="`c'", cluster(provid) first partial(i.provid)
+  }
+}
+
+
+
+loc y refhhi
+foreach c in "PN" {
+  di "Condition `c'------------------------"
   foreach v of varlist ln_pnlt_dollar_c pnlt_rate_c {
-    ivreg2 `y' i.fy i.size ln_dischnum_pac own_* urban teaching vi_snf i.provid (`v'X20* = ses_scoreX20* rblackX20*) if cond=="`c'" & fy < 2015, cluster(provid) first partial(i.provid)
+    ivreg2 `y' _Ify_* i.size ln_dischnum_pac `sp' i.provid (`v'X20* = ses_scoreX20* rblackX20*) if cond=="`c'" & fy < 2015, cluster(provid) first partial(i.provid)
   }
 }
 
@@ -713,7 +463,7 @@ loc ctrl_hr
 loc ctrl_dm
 loc ctrl_cm
 
-loc sp1 i.fy i.provid
+loc sp1 _Ify_* i.provid
 loc sp2 `sp1' i.size ln_dischnum_pac
 loc sp3 `sp2' own_* urban teaching
 loc sp4 `sp3' vi_snf
@@ -723,7 +473,7 @@ foreach c in "AMI" "HF" "PN" {
   forval n = 1/4 {
     di ""
     di "-------- Endog. Var & Spec `n' ----------"
-    eststo y_n`n': ivreg2 `y' i.fy `sp`n'' (`end' = `iv') if cond=="`c'" & fy < 2015, cluster(provid) first savefirst savefprefix(f_n`n'_) partial(i.provid) gmm2s
+    eststo y_n`n': ivreg2 `y' _Ify_* `sp`n'' (`end' = `iv') if cond=="`c'" & fy < 2015, cluster(provid) first savefirst savefprefix(f_n`n'_) partial(i.provid) gmm2s
 
     estimates dir
     estimates save iv_e_n`n', replace
@@ -785,7 +535,7 @@ loc ctrl_hr
 loc ctrl_dm
 loc ctrl_cm
 
-loc sp1 i.fy i.provid
+loc sp1 _Ify_* i.provid
 loc sp2 `sp1' i.size ln_dischnum_pac
 loc sp3 `sp2' own_* urban teaching
 loc sp4 `sp3' vi_snf
@@ -795,7 +545,7 @@ foreach c in "AMI" "HF" "PN" {
   forval n = 1/4 {
     di ""
     di "-------- Endog. Var & Spec `n' ----------"
-    eststo y_n`n': ivreg2 `y' i.fy `sp`n'' (`end' = `iv') if cond=="`c'" & fy < 2015, cluster(provid) first savefirst savefprefix(f_n`n'_) partial(i.provid) gmm2s
+    eststo y_n`n': ivreg2 `y' _Ify_* `sp`n'' (`end' = `iv') if cond=="`c'" & fy < 2015, cluster(provid) first savefirst savefprefix(f_n`n'_) partial(i.provid) gmm2s
 
     estimates dir
     estimates save iv_e_n`n', replace

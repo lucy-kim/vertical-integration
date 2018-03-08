@@ -1,115 +1,419 @@
 *descriptive analysis of the trend of vertical integration over time
+
+set matsize 11000
 loc gph /ifs/home/kimk13/VI/gph
 loc reg /ifs/home/kimk13/VI/tbls
 loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-loc f index_freq_no16.csv
-insheet using `f', comma names clear
-tempfile index
-save `index'
-
-*aggregate across destinations (ddest=06 for HHC, 03 for SNF)
-use `index', clear
-collapse (mean) dischnum white black read* ses_score, by(condition provid dischyear dischmth)
-tempfile index2
-save `index2'
-
-loc f match_freq_no16.csv
-insheet using `f', comma names clear
-rename provider pacprovid
-
-*are all the month-year present?
-preserve
-keep dischyear dischmth
+use penalty_VI_bycond, clear
+keep if match==1
+keep provid fy refhhi3 beds
 duplicates drop
-tab dischyear
-*2010/6 - 2015/12
+xtile gp_beds = beds, n(10)
+tab gp_beds, summarize(beds)
+
+gen x = beds if fy==2009
+bys provid: egen beds09 = max(x)
+
+areg refhhi3 i.fy i.gp_beds, absorb(provid) cluster(provid)
+
+tempfile tmp
+save `tmp'
+
+
+loc Large "if beds09 >= 300"
+loc Medium "if beds09 >= 100 & beds09 < 300"
+loc Small "if beds09 < 100"
+loc Largesc  ysc(r(0 0.15)) ylab(0(0.05)0.15)
+loc Mediumsc ysc(r(0 0.25)) ylab(0(0.05)0.25)
+loc Smallsc ysc(r(0 0.5)) ylab(0(0.1)0.5)
+
+*plot mean by size
+use `tmp', clear
+gen size = .
+loc n = 0
+foreach h in  "Small" "Medium" "Large" {
+  replace size = `n'+1 ``h''
+  loc n = `n'+1
+}
+assert size!=.
+preserve
+statsby upper=r(ub) lower=r(lb), clear by(size fy): ci refhhi3
+tempfile ci
+save `ci'
 restore
 
-*create quarters using months
-gen qtr = .
-forval x = 1/4 {
-  replace qtr = `x' if dischmth >= 1+(`x'-1)*3 & dischmth <= 3*`x'
+collapse (mean) mean=refhhi3, by(size fy)
+merge 1:1 size fy using `ci', nogen
+
+loc spec xti(Year ending in June, size(medium)) yti("Mean SNF referral concentration", size(medium)) leg(order(4 "Small" 5 "Medium" 6 "Large") cols(3)) xsc(r(2009 2016)) xlab(2009(1)2016) note("Notes. The SNF referral concentration among AMI, HF, and PN patients is plotted.") ysc(r(0 0.5)) ylab(0(0.1)0.5)
+
+tw (rarea upper lower fy if size==1, color(gs14)) (rarea upper lower fy if size==2, color(gs14)) (rarea upper lower fy if size==3, color(gs14)) (line mean fy if size==1, lpattern(dash) lcolor(black)) (line mean fy if size==2, lcolor(black) lpattern(solid)) (line mean fy if size==3, lcolor(black) lpattern(dot)) (scatter mean fy if size==1, mcolor(black)) (scatter mean fy if size==2, mcolor(black)) (scatter mean fy if size==3, mcolor(black)) , `spec' ``h'sc'
+graph export `gph'/refhhi3_bysize.eps, replace
+
+loc spec xti(Year ending in June, size(medium)) yti("SNF referral concentration", size(medium)) leg(order(2 "75th percentile" 3 "Median" 4 "25th percentile") cols(3)) xsc(r(2009 2016)) xlab(2009(1)2016) note("Notes. The SNF referral concentration among AMI, HF, and PN patients is plotted.")
+
+foreach h in "Large" "Medium" "Small" {
+  use `tmp', clear
+  keep ``h''
+  collapse (p25) p25=refhhi3 (p50) p50=refhhi3 (p75) p75=refhhi3 , by(fy)
+  tw (rarea p75 p25 fy, color(gs14)) (line p75 fy, lcolor(black) lpattern(dash) lwidth(medthick) ) (line p50 fy, lcolor(black) lwidth(medthick) ) (line p25 fy, lcolor(black) lpattern(dot) lwidth(medthick)) (scatter p75 fy, mcolor(black)) (scatter p50 fy, mcolor(black)) (scatter p25 fy, mcolor(black)), `spec' subti(`h' hospitals) ``h'sc'
+  graph export `gph'/bs_refhhi3_`h'.eps, replace
 }
 
-*create FY (ending in June) using months
-gen fy = .
-forval x = 2011/2016 {
-  loc y = `x'-1
-  replace fy = `x' if (dischyear==`y' & qtr>=3 & qtr <=4) | (dischyear==`x' & qtr>=1 & qtr <=2)
+binscatter refhhi3 fy if beds09 >= 300, absorb(provid) discrete xsc(r(2008 2016)) xlab(2009(1)2016) ysc(r(0 0.15)) ylab(0(0.05)0.15) `spec' subti(Large hospitals)
+graph export `gph'/bs_refhhi3_lg.eps, replace
+
+binscatter refhhi3 fy if beds09 >= 100 & beds09 < 300, absorb(provid) discrete xsc(r(2008 2016)) xlab(2009(1)2016) ysc(r(0 0.25)) ylab(0(0.05)0.25) `spec' subti(Medium hospitals)
+graph export `gph'/bs_refhhi3_med.eps, replace
+
+binscatter refhhi3 fy if beds09 < 100, absorb(provid) discrete xsc(r(2008 2016)) xlab(2009(1)2016) ysc(r(0 0.5)) ylab(0(0.1)0.5) `spec' subti(Small hospitals)
+graph export `gph'/bs_refhhi3_sm.eps, replace
+*----------------------------------------
+*construct cross-sectional variation  penalty pressure for each hospital-condition using 2009-2011 in 4 ways
+*1) Atul (2017): f(r_t-3, r_t-2, r_t-1) where r is raw readmission rate
+*2) my proposal: f(r_t-3, r_t-2, r_t-1, sh_t-3, sh_t-2, sh_t-3) where sh is share of Medicare payment
+*3) ERR in 2013
+*4) overall penalty rate in 2013
+
+forval t=2014/2018 {
+  loc t1 = `t'-5
+  loc t2 = `t'-3
+
+  *get raw readmission rates during t-3 - t-1
+  use `an2', clear
+  keep if fy >= `t1' & fy <= `t2'
+  tab fy
+
+  collapse (mean) read30 dischnum sh_pmt, by(cond provid fy)
+  drop if cond=="HK"
+  collapse (sum) read30 dischnum sh_pmt, by(provid fy)
+  collapse (sum) read30 dischnum (mean) sh_pmt, by(provid)
+  gen rra = read30/dischnum
+
+  keep provid rra sh_pmt
+  gen prod = rra * sh_pmt
+
+  tempfile rra
+  save `rra'
+
+  *get penalty status in t + 2
+  use `dta'/hrrp_penalty, clear
+  keep if fy==`t'
+  keep pnltr provid
+  duplicates drop
+  gen penalized = pnltr > 0
+  gen fy=`t'
+
+  merge 1:1 provid using `rra', keep(3) nogen
+
+  *local linear regression of penalty status on raw readmissions only
+  locreg penalized, continuous(rra) gen(phat, replace) logit
+
+  tempfile phat`t'
+  save `phat`t''
 }
-assert fy!=.
 
-tempfile match
-save `match'
+*append phat's across 2014-2016
+clear
+forval t = 2014/2018 {
+  append using `phat`t''
+}
+des
+tab fy
+sum phat
+tempfile phats
+save `phats'
 
-*restrict to hospitals that are subject to HRRP penalty; keep only hospitals that are penalized in FY 2015
-use `dta'/hrrp_penalty, clear
-keep if fy ==2013
-keep provid
+/* foreach c in "ami" "pn" "hf" {
+    gen poserr_`c' = err_`c' >=1
+    gen comp_`c' = poserr_`c' * (err_`c' -1) * sh_pmt_`c'/100
+}
+egen pnltr_redone = rowtotal(comp_*)
+replace pnltr_redone = pnltr_redone
+sum pnltr*
+
+*compare actual penalty rate and my construct using the Medicare payment share and ERR's
+sort pnltr14
+list provid pnltr* comp* err* n_* sh_pmt* in 1/100
+
+sc pnltr14 pnltr_redone if pnltr_redone < 0.021 || sc  pnltr14  pnltr14
+graph export `gph'/test.eps, replace
+*/
+
+
+
+*----------------------------------
+*local linear regression of penalty status on raw readmissions only
+use `phats', clear
+
+keep if fy==2014
+
+tw (line phat rra, xsc(r(0 0.4)) xlab(0(0.05)0.4) sort) (scatter penalized rra, xsc(r(0 0.4)) xlab(0(0.05)0.4) xti("Raw 30-day readmission rate during 2009-2011") yti(Probability of penalty in 2014) msymbol(circle_hollow) leg(order(1 "Probability of penalty" 2 "Hospital's actual penalty status") col(1)))
+graph export `gph'/pnlt_rra.eps, replace
+
+tw (kdensity rra if penalized==0, yti(Kernel density)) (kdensity rra if penalized==1), leg(order(1 "Non-penalized hospitals" 2 "Penalized hospitals" )) xti(Raw 30-day readmission rate during 2009-2011)
+graph export `gph'/density_rra_bypnlty.eps, replace
+
+*local linear regression of penalty status on raw readmissions & share
+replace prod = prod/100
+locreg penalized, continuous(prod) gen(phat2, replace) logit
+
+tw (line phat2 prod, xsc(r(0 0.4)) xlab(0(0.05)0.4) sort)  (scatter penalized prod, xsc(r(0 0.4)) xlab(0(0.05)0.4)  xti("Raw 30-day readmission rate X Share of Medicare payment in 2009-2011", size(small)) yti(Probability of penalty in 2014) msymbol(circle_hollow) leg(order(1 "Probability of penalty" 2 "Hospital's actual penalty status") col(1)))
+graph export `gph'/pnlt_rraXsh.eps, replace
+
+*----------------------------------
+* was there any mean reversion in the referral concentration?
+
+*plot referral HHI for 3 initial conditions in 2008 [x-axis] vs change in referral HHI between 2009-11 and 2012-14 across hospitals [y-axis]
+use `an2', clear
+keep provid fy refhhi3
 duplicates drop
-destring provid, replace
+keep if fy==2008
+ren refhhi3 refhhi3_08
+drop fy
+tempfile v08
+save `v08'
 
-tempfile hosp_keep
-save `hosp_keep'
+*get referral HHI for 2009-11 and 2012-14
+use PACreferral_tchpm, clear
+drop if cond=="HK"
+keep if pac=="SNF"
+keep if fy > 2008
 
-use `match', clear
+gen t = 1 if fy >= 2009 & fy <= 2011
+replace t = 2 if fy >= 2012 & fy <= 2014
+replace t = 3 if fy >= 2015 & fy <= 2016
+assert t!=.
+collapse (sum) dischnum_pac, by(provid t pacprovid)
 
-merge m:1 provid using `hosp_keep'
+bys provid t: egen tot = sum(dischnum)
+gen refshsq = (dischnum/tot)^2
 
-*for 2013-2015, about 240-246 hospitals in the penalty data unmatched (_m=2) - drop these hosps
-gen x = _m==2
-bys provid: egen bad = max(x)
-drop if bad==1
-drop x bad
-*fy 2016-2018 unmatched - fine b/c i don't have them
-drop _m
+*aggregate to the hospital-FY level
+collapse (sum) refhhi = refshsq, by(provid t)
+assert refhhi <= 1
 
-*rename vars before merging with index admissions data
-foreach v of varlist dischnum-samh90 {
-  rename `v' `v'_pac
+reshape wide refhhi, i(provid) j(t)
+gen change1 = refhhi2 - refhhi1
+gen change2 = refhhi3 - refhhi1
+
+merge 1:1 provid using `v08', keep(3) nogen
+
+xtile gp = refhhi3_08, nq(25)
+
+rename refhhi1 refhhi_0911
+rename refhhi2 refhhi_1214
+rename refhhi3 refhhi_1516
+
+tempfile tmp
+save `tmp'
+
+*QQ plot of referral HHI in 2009-11 vs referral HHI in 2012-2014
+qqplot refhhi_1214 refhhi_0911, xti(SNF referral HHI in 2009-2011) yti(SNF referral HHI in 2012-2014)
+graph export `gph'/qqplot_refhhi_0911vs1214.eps, replace
+
+qqplot refhhi_1516 refhhi_0911, xti(SNF referral HHI in 2009-2011) yti(SNF referral HHI in 2015-2016)
+graph export `gph'/qqplot_refhhi_0911vs1516.eps, replace
+
+qqplot refhhi_1516 refhhi_1214, xti(SNF referral HHI in 2012-2014) yti(SNF referral HHI in 2015-2016)
+graph export `gph'/qqplot_refhhi_1214vs1516.eps, replace
+
+
+qqplot days_ho days_nho, xti(Readmission not followed by a handoff, size(medium)) yti(Readmission followed by a handoff, size(medium) height(5)) title("Quantile-Quantile plot" "Number of days to readmission from the last nurse visit", size(medium))
+graph export `gph'/days2readmit3.eps, replace
+
+
+
+*mean change in referrals vs referral in 2008
+collapse (mean) refhhi3_08 change1 change2, by(gp)
+
+sc change1 change2 refhhi3_08, xti(SNF referral HHI for 3 conditions in 2008) yti("Change in SNF referral HHI, After - Before") ysc(r(-0.1 0.1)) ylab(-0.1(0.05)0.1) leg(order(1 "Change from 2009-2011 to 2012-2014" 2 "Change from 2009-2011 to 2015-2016") col(1))
+graph export `gph'/chng_VI_by08value.eps, replace
+
+*plot the referral concentration trend across FY for high-penalty vs low-penalty hospitals
+use `an2', clear
+gen x = pnltr if fy==2013
+bys provid: egen pnltr13= max(x)
+keep provid fy refhhi3 pnltr13 size
+duplicates drop
+
+gen fy0 = fy
+replace fy = fy + 2
+merge m:1 provid fy using `phats', keep(1 3) nogen
+drop fy
+rename fy0 fy
+
+*divide into 3 equal sized groups
+preserve
+keep if fy==2014
+keep provid pnltr13 phat
+duplicates drop
+xtile gp = pnltr13, nq(3)
+table gp, c(mean pnlt)
+
+xtile gp_phat = phat, nq(3)
+table gp_phat, c(mean phat)
+tempfile gp
+save `gp'
+restore
+
+merge m:1 provid using `gp', keepusing(gp*) nogen
+
+*binscatter change in referral concentration in 2012, 2013, 2014, 2015, 2016 from 2009-2011 level vs phat
+*merge with referral HHI during 2009-2011
+merge m:1 provid using `tmp', keepusing(refhhi1 refhhi3_08) keep(3) nogen
+
+tab fy, summarize(phat)
+forval yr = 2012/2016 {
+  gen chng_to_`yr' = 100*(refhhi3 - refhhi1)/refhhi1
 }
+
+binscatter refhhi1 phat, by(fy)
+graph export `gph'/test.eps, replace
+
+forval yr = 2012/2016 {
+  binscatter chng_to_`yr' phat if fy==`yr', controls(i.size)
+  graph export `gph'/test`yr'.eps, replace
+}
+
+
+binscatter refhhi3 fy if gp==1, absorb(provid) controls(i.size) rd(2012) line(qfit)
+graph export `gph'/test.eps, replace
+
+
+
+
+
+
+preserve
+collapse (mean) refhhi3, by(gp fy)
+
+tab gp, summarize(refhhi3)
+
+tw (connected refhhi3 fy if gp==1) (connected refhhi3 fy if gp==2) (connected refhhi3 fy if gp==3), yti(Mean SNF referral HHI for 3 conditions) xti(FY) xline(2010.5) xline(2011.5) xlab(2008(1)2016) leg(order(1 "Low penalty" 2 "Medium penalty" 3 "High penalty") col(1)) ysc(r(0.15 0.25)) ylab(0.15(0.01)0.25)
+graph export `gph'/refhhi3_fy_bypnlt13.eps, replace
+restore
+
+preserve
+collapse (mean) refhhi3, by(gp_phat fy)
+tab gp, summarize(refhhi3)
+
+tw (connected refhhi3 fy if gp==1) (connected refhhi3 fy if gp==2) (connected refhhi3 fy if gp==3), yti(Mean SNF referral HHI for 3 conditions) xti(FY) xline(2011.5) xlab(2008(1)2016) leg(order(1 "Low probability of penalty" 2 "Medium probability of penalty" 3 "High probability of penalty") col(1)) ysc(r(0.15 0.28)) ylab(0.15(0.01)0.28)
+graph export `gph'/refhhi3_fy_byphat.eps, replace
+restore
+*----------------------------------
+*run regression of probability of penalty X post
+use `an', clear
+drop if cond=="HK"
+collapse (mean) ses_score vi* refhhi3 size own* urban teaching hsahhi_SNF_* (sum) white black dischnum dischnum_pac, by(provid fy)
+egen hsahhi_SNF = rowmean(hsahhi_SNF_AMI hsahhi_SNF_HF hsahhi_SNF_PN)
+
+*keep provid fy refhhi3 size own* urban teaching vi* ses_score white black dischnum
+duplicates drop
+gen whiter = white/dischnum
+gen blackr = black/dischnum
+gen ln_dischnum = ln(dischnum +1)
+gen ln_dischnum_pac = ln(dischnum_pac +1)
+gen shref = dischnum_pac / dischnum
+
+gen fy0 = fy
+replace fy = fy + 2
+merge m:1 provid fy using `phats', keep(1 3) nogen
+drop fy
+rename fy0 fy
+
+capture drop post phatXpost
+gen post = fy >=2012
+gen phatXpost = phat * post
+replace phatXpost = 0 if post==0
+
+gen phat14 = phat if fy==2014
+bys provid: egen x = max(phat14)
+drop phat14
+rename x phat14
+
+loc sp1 i.size ln_dischnum ln_dischnum_pac
+loc sp2 `sp1' own* urban teaching
+loc sp3 `sp2' hsahhi_SNF
+loc sp4 `sp3' vi*
+
+tab fy , summarize(phatXpost)
+
+areg refhhi3 i.fy c.phat14##i.fy `sp2', absorb(provid)
+areg refhhi3 i.fy phatXpost `sp2', absorb(provid)
+
+loc sp1 i.size ln_dischnum
+loc sp2 `sp1' own* urban teaching
+loc sp3 `sp2' hsahhi_SNF
+loc sp4 `sp3' vi*
+
+areg shref i.fy c.phat14##i.fy `sp2', absorb(provid)
+areg shref i.fy phatXpost `sp2', absorb(provid)
+
+
+ivreg2 refhhi3 i.fy phatXpost `sp2', absorb(provid)
+
+preserve
+gen x = pnltr if fy==2013
+bys provid: egen pnltr13 = mean(x)
+keep if fy < 2012
+keep provid cond pnltprs pnltr13
+
+collapse (mean) pnltprs pnltr13, by(provid cond)
+
+gen cond2= "3c" if cond!="HK"
+replace cond2 = "HK" if cond2==""
+collapse (sum) pnltprs (mean) pnltr13, by(provid cond2)
+
+rename pnltprs pnltprs_
+reshape wide pnltprs_ , i(provid pnltr13) j(cond2) string
+
+sum pnlt*, de
+
+foreach v of varlist pnlt* {
+  sum `v', de
+  gen `v'_p75 = `v' >= `r(p75)'
+  replace `v'_p75 = . if `v'==.
+}
+
+tempfile pnltprs
+save `pnltprs'
+restore
+
+merge m:1 provid using  `pnltprs', nogen
+
+tempfile an
+save `an'
+
+drop read*_pac samh*pac *rev *inc hrrhhi* hsahhi* dischnum*08 read* beds-totepi_out hrrnum hsanum hrr_str
+
 compress
-save match_pnlthosp, replace
-*------------------------------------
-*get hosp chars data from the cost report & AHA data
-insheet using `dta'/costreport/hosp_vi.csv, comma names clear
-keep if pac=="hha" | pac=="snf"
-drop if fy > 2016 | fy < 2011
-sort prov_num fy pac
-keep prov_num fyear state pac vi teaching urban own_* beds dischrg size
-reshape wide vi, i(prov_num fyear state) j(pac) string
-rename vihha own_hha
-rename visnf own_snf
+outsheet using hosp_fy_VI.csv, replace names comma
 
-*recode the outlier # beds as missing and use the previous FY's value
-replace beds = . if beds > 3000 & beds!=.
-sort prov fy
-bys prov: replace beds = beds[_n-1] if beds >=.
+*----------------------------------------
+*	# admissions over time
+use `an', clear
 
-rename prov_num provid
-rename fyear fy
+keep provid fy dischnum cond size beds
 duplicates drop
+bys provid: egen min = min(size)
+bys provid: egen max = max(size)
+table provid if min!=max, contents(mean min mean max)
+sort cond provid fy
+list if provid==10011
 
-duplicates tag provid fy, gen(dup)
-assert dup==0
-drop dup
+tab cond fy
 
-*reconstruct size category b/c missing values in bed is filled with previously available values
-*create hospital size category
-drop size
-gen size = 1 if beds <= 100
-replace size = 2 if beds >100 & beds <= 500
-replace size = 3 if beds > 500
-assert size!=.
-replace size = . if beds==.
+preserve
+keep if cond!="HK"
+graph box dischnum, over(fy, label(angle(45))) by(cond) yti(Total number of discharges) ti(Box plot, size(medium)) subti(Total number of discharges by FY)
+graph export `gph'/dischnum_ahp.eps, replace
 
-sort provid fy
-tempfile costreport
-save `costreport'
-*--------------------------------------------------
+
+
 
 * 1) create hospital-time level data
 

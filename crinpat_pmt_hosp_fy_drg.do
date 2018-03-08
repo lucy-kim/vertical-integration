@@ -7,7 +7,7 @@ loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare/inpat-utilization-and-payment-PUF
 
-*MS-DRGs for each condition (From https://www.cms.gov/icd10manual/fullcode_cms/P0108.html)
+/* *MS-DRGs for each condition (From https://www.cms.gov/icd10manual/fullcode_cms/P0108.html)
 *AMI: 280-285
 *HF: 291-293
 *PN: 193-195
@@ -16,7 +16,17 @@ loc ami drg >= 280 & drg <=285
 loc hf drg >= 291 & drg <=293
 loc pn drg >= 193 & drg <=195
 loc hk drg >= 466 & drg <=470
-*I'm a little unsure about 469 & 470 which is for total joint replacement beyond hip & knee
+*I'm a little unsure about 469 & 470 which is for total joint replacement beyond hip & knee */
+
+*instead of restricting to pre-selected DRGs for each condition, get a list of DRGs reported in the Medicare claims data and match with payment data
+use `dta'/Medicare/index_admit_DRG_chy.dta, clear
+rename drgcd drg
+tab drg, sort
+tab drg cond
+keep drg
+duplicates drop
+tempfile drg
+save `drg'
 
 lab define ll 1 "AMI" 2 "HF" 3 "PN" 4 "HK"
 
@@ -27,14 +37,7 @@ forval y= 2014/2015 {
   split drgdefinition, p(" - ")
   destring drgdefinition1, gen(drg)
 
-  gen condition = .
-  loc i = 1
-  foreach c in "ami" "hf" "pn" "hk" {
-    replace condition = `i' if ``c''
-    loc i = `i'+1
-  }
-  drop if condition==.
-  lab val cond ll
+  merge m:1 drg using `drg', keep(3) nogen
 
   gen fy = `y'
 
@@ -46,7 +49,7 @@ forval y= 2014/2015 {
   rename totaldischarges ndisch
   rename averagemedicare amcr_pmt
 
-  keep provid hrr ndisch amcr_pmt drg fy cond tmcr_pmt
+  keep provid hrr ndisch amcr_pmt drg fy tmcr_pmt
 
   compress
   save inpat_pmt_hosp_fy_drg_`y', replace
@@ -59,14 +62,7 @@ forval y= 2011/2013 {
   split drgdefinition, p(" - ")
   destring drgdefinition1, gen(drg)
 
-  gen condition = .
-  loc i = 1
-  foreach c in "ami" "hf" "pn" "hk" {
-    replace condition = `i' if ``c''
-    loc i = `i'+1
-  }
-  drop if condition==.
-  lab val cond ll
+  merge m:1 drg using `drg', keep(3) nogen
 
   gen fy = `y'
 
@@ -78,26 +74,107 @@ forval y= 2011/2013 {
   rename totaldischarges ndisch
   rename averagemedicare amcr_pmt
 
-  keep provid hrr ndisch amcr_pmt drg fy cond tmcr_pmt
+  keep provid hrr ndisch amcr_pmt drg fy tmcr_pmt
 
   compress
   save inpat_pmt_hosp_fy_drg_`y', replace
 }
 
-*for each hospital, calculate the share of DRG
-forval y=2011/2015 {
-  use `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hosp_fy_drg_`y', clear
-  tab drg cond
-}
 
 *append 2014-2015 data b/c all DRGs are captured only for those fys
 clear
 forval y=2011/2015 {
   append using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hosp_fy_drg_`y'
 }
-sort cond drg provid fy
+sort provid drg fy
 
-*sum payment across DRGs for each condition-hospital-fy
+*since there is no payment data for 2008-2010 & 2016, use the most recent value
+preserve
+keep provid drg
+duplicates drop
+expand 9
+bys provid drg: gen fy = 2008+_n-1
+tempfile base
+save `base'
+restore
+
+merge 1:1 provid drg fy using `base'
+
+*fill in missing values downstream & upstream
+sort provid drg fy
+foreach v of varlist ndisch amcr_pmt tmcr_pmt {
+  bys provid drg: replace `v' = `v'[_n-1] if `v' >=.
+}
+gsort provid drg -fy
+foreach v of varlist ndisch amcr_pmt tmcr_pmt {
+  bys provid drg: replace `v' = `v'[_n-1] if `v' >=.
+}
+sort provid drg fy
+assert amcr_pmt!=.
+
+*get a unique HRR label for each hospital
+preserve
+keep provid hrr
+drop if hrr==""
+replace hrr_str = "CA - Palm Springs/Rancho Mirage" if hrr=="CA - Palm Springs/Rancho M"
+duplicates drop
+bys provid: gen n = _N
+assert n==1
+drop n
+tempfile hosp_hrr_xwalk
+save `hosp_hrr_xwalk'
+
+drop hrr_str
+merge m:1 provid using `hosp_hrr_xwalk', nogen
+drop _merge
+
+*keep provid fy drg hrr_str amcr_pmt
+
+tempfile pay
+save `pay'
+
+*merge the average Medicare payment for each hospital-FY-DRG with data on # admissions for that DRG in each hospital-FY
+use `dta'/Medicare/index_admit_DRG_chy.dta, clear
+rename drgcd drg
+merge m:1 provid fy drg using `pay', keep(1 3)
+
+*for each condition, what is the total Medicare payment in that hospital-FY?
+*get drg-level average Medicare payment X # admissions with the DRG for each hospital-fy
+gen prod = amcr_pmt*count
+
+*if there is no average payment available for the hospital-DRG-FY, use the national median for the DRG-FY
+preserve
+keep drg provid fy amcr
+duplicates drop
+collapse (median) natlmed= amcr, by(drg fy)
+tempfile natlmed
+save `natlmed'
+restore
+
+merge m:1 drg fy using `natlmed', nogen
+replace prod = natlmed*count if _m==1
+
+sort cond provid drg fy
+
+*aggregate the product across DRGs for each condition
+collapse (sum) prod, by(provid cond fy)
+rename prod mcr_pmt
+
+*get the HRR
+merge m:1 provid using `hosp_hrr_xwalk', nogen keep(1 3)
+
+compress
+save inpat_pmt_chy, replace
+
+/* *for each hospital, what are the DRGs showing up for each condition?
+forval y=2011/2015 {
+  use `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hosp_fy_drg_`y', clear
+  tab drg cond
+} */
+
+
+
+/* *sum payment across DRGs for each condition-hospital-fy
 collapse (sum) ndisch tmcr_pmt, by(cond provid hrr_str fy)
 
 forval x=1/4 {
@@ -152,11 +229,4 @@ replace cond = "HK" if condition==4
 drop condition
 rename cond condition
 compress
-save `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_2014, replace
-
-
-
-forval y=2011/2015 {
-  append using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hosp_fy_drg_`y'
-}
-sort cond drg provid fy
+save `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_2014, replace */

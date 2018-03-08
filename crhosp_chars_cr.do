@@ -3,11 +3,8 @@
 cd /home/hcmg/kunhee/Labor/Bayada_data
 
 *append all years of Cost report data
-use hospcr2010_2552_10, clear
-append using hospcr2011_2552_10
-forval y = 2012/2017 {
-    append using hospcr`y'
-}
+use hospcr_panel_2010_2016, clear
+append using hospcr_panel_2007_2011
 
 *restrict to short-term general hospitals by looking at the last 4 digits fo provider number
 *0001-0879 from https://www.resdac.org/sites/resdac.umn.edu/files/Provider%20Number%20Table.txt
@@ -44,16 +41,31 @@ drop urban
 rename x_urban urban
 
 *use fyear as the year basis
-collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out , by(prov_num state fyear)
+collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out , by(prov_num fyear)
+
+destring prov_num, gen(provid)
+drop prov_num
+rename fyear fy
+
+*fill in missing values downstream & upstream
+sort provid fy
+order provid fy
+foreach v of varlist vi_ipf-totepi_out {
+  bys provid: replace `v' = `v'[_n-1] if `v'>=.
+}
+gsort provid -fy
+foreach v of varlist vi_ipf-totepi_out {
+  bys provid: replace `v' = `v'[_n-1] if `v'>=.
+}
+sort provid fy
+count if beds==.
 
 *create hospital size category
 gen size = 1 if beds <= 100
-replace size = 2 if beds >100 & beds <= 500
-replace size = 3 if beds > 500
+replace size = 2 if beds >100 & beds <= 300
+replace size = 3 if beds > 300
 assert size!=.
 replace size = . if beds==.
-
-keep if fy > 2010 & fy < 2016
 
 compress
 saveold hosp_chars_cr, replace

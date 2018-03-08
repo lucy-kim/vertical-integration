@@ -104,9 +104,9 @@ data merged;
 %end;
 %mend;
 
-%loopalpha(fyear=2010,lyear=2011);
-%loopnmrc(fyear=2010,lyear=2011);
-%loop(fyear=2010,lyear=2011);
+%loopalpha(fyear=2007,lyear=2011);
+%loopnmrc(fyear=2007,lyear=2011);
+%loop(fyear=2007,lyear=2011);
 
 x "mv hospcr2010.dta hospcr2010_2552_96.dta";
 x "mv hospcr2011.dta hospcr2011_2552_96.dta";

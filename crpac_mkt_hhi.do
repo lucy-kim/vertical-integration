@@ -1,28 +1,9 @@
-*create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data
+*create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)
 
 loc path /ifs/home/kimk13/VI/data
 cd `path'/Medicare
 
-loc f match_freq_no16.csv
-insheet using `f', comma names clear
-rename provider pacprovid
-
-*create quarters using months
-gen qtr = .
-forval x = 1/4 {
-  replace qtr = `x' if dischmth >= 1+(`x'-1)*3 & dischmth <= 3*`x'
-}
-
-*create FY (ending in June) using months
-gen fy = .
-forval x = 2011/2016 {
-  loc y = `x'-1
-  replace fy = `x' if (dischyear==`y' & qtr>=3 & qtr <=4) | (dischyear==`x' & qtr>=1 & qtr <=2)
-}
-
-*drop for now July-Dec 2015 b/c they belong to FY 2016
-/* drop if dischyear ==2015 & dischm > 6 */
-assert fy!=.
+use PACreferral_tchpm, clear
 
 *fiscal year level HHI
 collapse (sum) dischnum, by(pac condition provid pacprovid fy)

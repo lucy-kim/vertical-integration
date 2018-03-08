@@ -7,7 +7,7 @@ Research on the vertical integration between hospital and post-acute care (PAC)
 
 2. Write SAS or Stata codes to extract data from those specific locations. The [NBER HCRIS data](http://www.nber.org/data/hcris.html) page provides template codes as well as raw data. My codes are adapted from those.
 
-I share my codes that achieve creating hospital-level panel data for 2011-2016 from the cost reports (as of 8/23/16, 2016 seems incomplete). They contain only the select variables of my interest. To run these codes,
+We share my codes that achieve creating hospital-level panel data for 2011-2016 from the cost reports (as of 8/23/16, 2016 seems incomplete). They contain only the select variables of my interest. To run these codes,
 
 1. Set the working directory to the cloned repository directory or wherever the following bash script file is.
 ```
@@ -19,7 +19,37 @@ qsub hospcr.sh
 ```
 Note: Change the working directory inside individual code files.
 
+## Setting up aggregate Medicare data
+We use hospital-month-condition level index admissions data (for the hospital readmissions penalty) and hospital-month-condition-PAC provider level referral data (where referrals are defined as starting PAC within 5 days from hospital discharge).
+
+1. `crindex_admit_chm.do`
+  - Import hospital-month-condition level index admissions data
+  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
+2. `crPACreferral_tchpm.do`
+  - Import hospital-month-condition-PAC provider level referral data separately for HHA and SNF
+  - HHA data available for 2010/7 - 2016/6 except 2012/6 (just not avail.)
+  - SNF data available for 2008/1 - 2016/6 except 2012/6 (just not avail.)
+4. `crindex_admit_DRG_chy.do`
+  - Create hospital-FY-condition-DRG level index admissions data
+  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
+5. `crinpat_pmt_hosp_fy_drg.do`
+  - Create hospital-FY-condition level data on Medicare inpatient payment by combining the DRG-level counts from our internal Medicare data with the public DRG-level average payment payment data from CMS
+6. `hospcr.sh` in `costreport_hosp` directory
+  - Get hospital characteristics and total patient revenues for each FY from CMS Cost Report data
+7. `crpac_mkt_hhi.do`
+  - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)
+3. `crhosp_fy_VI.do`
+  - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
+  - hospital characteristics from Hospital cost reports data
+
 ## Describe the trend of hospital-PAC vertical integration
+1. `desc_trend_VI.do`
+  - descriptive analysis of the trend of vertical integration over time
+2. `desc_trend_VI2.do`
 
 
-## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration 
+## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration
+1. `crVI_hospsmpl.do`
+2. `predict_pnltprs.do`
+1. `anpenalty_VI_bycond.do`
+4. `ivpenalty_VI_bycond.do`
