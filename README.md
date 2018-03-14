@@ -38,9 +38,9 @@ We use hospital-month-condition level index admissions data (for the hospital re
   - Get hospital characteristics and total patient revenues for each FY from CMS Cost Report data
 7. `crpac_mkt_hhi.do`
   - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)
-3. `crhosp_fy_VI.do`
-  - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
-  - hospital characteristics from Hospital cost reports data
+1. `crhosp_compare.do`
+  - Use hospital compare data for hospital level risk-adjusted readmission rate data during a 3-year window period
+
 
 ## Describe the trend of hospital-PAC vertical integration
 1. `desc_trend_VI.do`
@@ -49,6 +49,9 @@ We use hospital-month-condition level index admissions data (for the hospital re
 
 
 ## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration
+3. `crhosp_fy_VI.do`
+  - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
+  - hospital characteristics from Hospital cost reports data
 1. `crVI_hospsmpl.do`
 2. `predict_pnltprs.do`
 1. `anpenalty_VI_bycond.do`

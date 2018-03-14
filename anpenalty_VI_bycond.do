@@ -5,76 +5,19 @@ net install ivqte, from("https://sites.google.com/site/blaisemelly/")
 net install st0026_2, from(http://www.stata-journal.com/software/sj5-3)
 ssc install moremata
 
-loc gph /ifs/home/kimk13/VI/gph
-loc reg /ifs/home/kimk13/VI/tbls
+loc gph /ifs/home/kimk13/VI/output
+loc reg /ifs/home/kimk13/VI/output
 loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-use predict_pnltprs, clear
+use predict_pnltprs_agg3c, clear
 
-rename pred_pnltstatus_t2_err ppst
-rename pred_pnltrate_t2_err ppr
-rename pred_pnltdollar_t2_err ppd
+/* keep if matched==1 */
 
-keep if matched==1
-
-table fy if cond=="AMI", content(mean penalized_t2 mean pnltrate_t2 mean pnltdollar_t2)
-table fy if cond=="AMI", content(mean ppst mean ppr mean ppd)
-
-*for pre-years, recode predicted penalty rate to 0
-loc int 2012
-foreach v of varlist ppst ppr ppd {
-  replace `v' = 0 if fy <  & `v'==.
-}
-table fy if cond=="AMI", content(mean ppst mean ppr mean ppd)
-
-replace ppd = ppd*100000
-
-foreach v of varlist ppd {
-  gen l`v' = ln(`v' + 1)
-}
-
+table fy , content(mean penalized_t2 mean pnltrate_t2 mean pnltdollar_t2)
+table fy , content(mean ppst mean ppr mean ppd)
 *use the predicted penalty likelihood, rate, dollar amounts as key indep vars in the regression
-
-* 1) cross-sectional variation: use the 2012 readmissions penalty pressure based on 2009-2011 performance
-foreach v of varlist ppst ppr lppd  {
-  capture drop x
-  gen x = `v' if fy==`int'
-  bys cond provid: egen `v'`int' = max(x)
-}
-
-*char fy[omit] 2016
-xi i.fy
-gen post = fy >=`int'
-
-*interaction of penalty pressure and post period indicators
-local lppst`int' "Predicted likelihood of penalty in `int'"
-local lppr`int' "Predicted penalty rate in `int'"
-local llppd`int' "Log Predicted penalty amount ($) in `int'"
-
-foreach v of varlist ppst`int' ppr`int' lppd`int' {
-  tab fy, summarize(`v')
-
-  capture drop `v'Xpost
-  gen `v'Xpost = `v'*post
-  lab var `v'Xpost "`l`v'' X Post"
-
-  forval t=2010/2016 {
-    capture drop `v'X`t'
-    gen `v'X`t' = `v'*_Ify_`t'
-    lab var `v'X`t' "`l`v'' X `t'"
-  }
-}
-
-lab var ppst "Predicted likelihood of penalty"
-lab var ppr "Predicted penalty rate"
-lab var ppd "Predicted penalty amount ($)"
-lab var lppd "Log Predicted penalty amount ($)"
-
-lab var ppst`int' "Predicted likelihood of penalty in `int'"
-lab var ppr`int' "Predicted penalty rate in `int'"
-lab var lppd`int' "Log Predicted penalty amount ($) in `int'"
 
 * create share of SNF referrals outcome
 gen shref = dischnum_pac/dischnum
@@ -93,10 +36,31 @@ restore
 
 merge m:1 provid fy using `gp_beds', keep(1 3) nogen
 
-gen hrrhhi_SNF = .
-foreach c in "AMI" "HF" "PN" {
-  replace hrrhhi_SNF = hrrhhi_SNF_`c' if cond=="`c'"
-  drop hrrhhi_SNF_`c'
+char fy[omit] 2011
+xi i.fy
+gen post = fy >=`int'
+
+local lppst "Predicted likelihood of penalty"
+local lppr "Predicted penalty rate"
+local llppd "Log Predicted penalty amount ($)"
+
+local lppst`int' "Predicted likelihood of penalty in `int'"
+local lppr`int' "Predicted penalty rate in `int'"
+local llppd`int' "Log Predicted penalty amount ($) in `int'"
+
+*interaction of continuous penalty pressure and post period indicators
+foreach v of varlist ppst* ppr* lppd* {
+  tab fy, summarize(`v')
+
+  capture drop `v'Xpost
+  gen `v'Xpost = `v'*post
+  lab var `v'Xpost "`l`v'' X Post"
+
+  foreach t of numlist 2009 2010 2012 2013 2014 2015 2016 {
+    capture drop `v'X`t'
+    gen `v'X`t' = `v'*_Ify_`t'
+    lab var `v'X`t' "`l`v'' X `t'"
+  }
 }
 
 tempfile tmp
@@ -104,11 +68,11 @@ save `tmp'
 
 *get indicators for top quartlie & middle 2 quartiles
 use `tmp', clear
-keep cond provid ppst`int' ppr`int' lppd`int'
+keep provid ppst`int' ppr`int' lppd`int'
 duplicates drop
 foreach pp of varlist ppst`int' ppr`int' lppd`int' {
-  bys cond: egen x_p75_`pp' = pctile(`pp'), p(75)
-  bys cond: egen x_p25_`pp' = pctile(`pp'), p(25)
+  egen x_p75_`pp' = pctile(`pp'), p(75)
+  egen x_p25_`pp' = pctile(`pp'), p(25)
   gen p75_`pp' = `pp' > x_p75_`pp'
   gen p25_75_`pp' = `pp' > x_p25_`pp' & `pp' <= x_p75_`pp'
 }
@@ -117,11 +81,11 @@ tempfile quartiles
 save `quartiles'
 
 use `tmp', clear
-merge m:1 cond provid using `quartiles', keep(1 3) nogen
+merge m:1 provid using `quartiles', keep(1 3) nogen
 
-*create indicators for the top quartile, middle 2 quatiles in the penalty pressure
+*create interaction of penalty pressure with indicators for the top quartile, middle 2 quatiles in the penalty pressure
 foreach pp of varlist ppst`int' ppr`int' lppd`int' {
-  forval t=2010/2016 {
+  foreach t of numlist 2009 2010 2012 2013 2014 2015 2016 {
     gen p75_`pp'X`t' = p75_`pp' * _Ify_`t'
     lab var p75_`pp'X`t' "Top quartile in `l`pp'' X `t'"
     gen p25_75_`pp'X`t' = p25_75_`pp' * _Ify_`t'
@@ -136,25 +100,55 @@ des p75* p25_75*
 
 tab fy, summarize(p75_ppst`int'Xpost)
 
+*get indicators for top quartlie & middle 2 quartiles
+foreach pp of varlist ppst ppr lppd {
+  bys fy: egen x_p75_`pp' = pctile(`pp'), p(75)
+  bys fy: egen x_p25_`pp' = pctile(`pp'), p(25)
+  gen p75_`pp' = `pp' > x_p75_`pp'
+  gen p25_75_`pp' = `pp' > x_p25_`pp' & `pp' <= x_p75_`pp'
+}
+drop x_*
+
+tab fy, summarize(p75_ppst)
+
+*create interaction terms with indicators for the top quartile, middle 2 quatiles in the penalty pressure and post indicators
+foreach pp of varlist ppst ppr lppd {
+  foreach t of numlist 2009 2010 2012 2013 2014 2015 2016 {
+    gen p75_`pp'X`t' = p75_`pp' * _Ify_`t'
+    lab var p75_`pp'X`t' "Top quartile in `l`pp'' X `t'"
+    gen p25_75_`pp'X`t' = p25_75_`pp' * _Ify_`t'
+    lab var p25_75_`pp'X`t' "Middle 2 quartiles in `l`pp'' X `t'"
+    *gen `pp'X`t' = `pp' * _Ify_`t'
+    *lab var `pp'X`t' "`l`pp'' X `t'"
+  }
+  gen p75_`pp'Xpost = p75_`pp' * post
+  gen p25_75_`pp'Xpost = p25_75_`pp' * post
+  lab var p75_`pp'Xpost "Top quartile X Post"
+  lab var p25_75_`pp'Xpost "Middle 2 quartiles X Post"
+  *gen `pp'Xpost = `pp' * post
+  *lab var `pp'Xpost "`l`pp'' X Post"
+}
+des p75* p25_75*
+
+
 *create laggeed formally owning SNF
 preserve
-use hosp_fy_VI, clear
-keep if pac=="SNF"
-sort cond provid fy
-bys cond provid: gen vi_snf_l = vi_snf[_n-1]
+use hosp_fy_VI_agg3c, clear
+sort provid fy
+bys provid: gen vi_snf_l = vi_snf[_n-1]
 tab fy, summarize(vi_snf_l)
 lab var vi_snf_l "Owns SNF, lagged"
-keep cond provid fy vi_snf_l
+keep provid fy vi_snf_l
 duplicates drop
 tempfile vi_snf_l
 save `vi_snf_l'
 restore
 
-merge 1:1 cond provid fy using `vi_snf_l', keep(1 3) nogen
+merge 1:1 provid fy using `vi_snf_l', keep(1 3) nogen
 tab fy, summarize(vi_snf_l)
 
 lab var vi_snf "Formally owns SNF"
-lab var hrrhhi_SNF "SNF market concentration"
+lab var pac_hhi_hrr "SNF market concentration"
 lab var urban "Urban"
 lab var teaching "Teaching"
 lab var own_fp "For profit"
@@ -164,13 +158,31 @@ lab var own_gv "Government owned"
 tempfile an
 save `an'
 
-* regress the referral concentration on hospital FE, penalty pressure, fiscal year FE
+compress
+save anpenalty_VI_agg3c.dta, replace
+
+
+*-----------------------
+*to send to Lily, only get hospital-FY level penalty pressure data
+use `an', clear
+
+xi i.gp_beds i.fy
+loc sp _Igp_beds* vi_snf_l own_* urban teaching pac_hhi_hrr
+keep provid fy ppst* ppr* lppd* p25* p75* _Ify* post `sp'
+order provid fy ppst* ppr* lppd* p25* p75* _Ify* post `sp'
+
+compress
+save anpenalty_VI_agg3c_lily, replace
+
+outsheet using anpenalty_VI_agg3c_lily.csv, replace comma names
+*-----------------------
+
 
 
 *---------------------------
 *use the cross-sectional variation across hospitals by  penalty pressure based on 2009-2011 performance
 
-loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
+loc sp i.gp_beds vi_snf_l own_* urban teaching pac_hhi_hrr
 
 foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_used shref {
   * use post dummy
@@ -208,7 +220,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
       sum `y' if e(sample)
       loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching pac_hhi_hrr) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
     }
   }
 
@@ -244,7 +256,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
       sum `y' if e(sample)
       loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching pac_hhi_hrr) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
     }
   }
 }
@@ -312,7 +324,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
 
     loc file ols_`y'_ts_post
     loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
-    loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
+    loc sp i.gp_beds vi_snf_l own_* urban teaching pac_hhi_hrr
 
     foreach pp of varlist ppst ppr lppd {
       use `an2', clear
@@ -333,7 +345,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
       sum `y' if e(sample)
       loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching pac_hhi_hrr) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
     }
   }
 
@@ -347,7 +359,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
     di "Condition `c'------------------------"
 
     loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`c' `l`pp'')"
-    loc sp i.gp_beds vi_snf_l own_* urban teaching hrrhhi_SNF
+    loc sp i.gp_beds vi_snf_l own_* urban teaching pac_hhi_hrr
 
     foreach pp of varlist ppst ppr lppd {
       use `an2', clear
@@ -370,7 +382,7 @@ foreach y of varlist refhhi refhhi_prevSNFs shsnf_used_ag shsnf_used rat_nsnf_us
       sum `y' if e(sample)
       loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching hrrhhi_SNF) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
+      `out' keep(`pnltprs' _Ify_* vi_snf_l own_* urban teaching pac_hhi_hrr) addtext(Mean dep. var., `mdv', Hospital FE, Y) dec(3) fmt(fc)
     }
   }
 }

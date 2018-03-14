@@ -123,6 +123,7 @@ bys pac cond provid: gen ym = `fm' + _n-1
 format ym %tm
 
 merge 1:m pac cond provid ym using `tmp'
+*if _m==1, pacprovid is missing
 
 *fill in zero's if unmatched; if there is no PAC referral, the # referral should be 0 for that PAC type-condition-month cell
 sort pac cond provid ym pacprovid
@@ -131,6 +132,8 @@ foreach v of varlist *_pac {
   *2012 June: exclude
   replace `v' = . if dischyear==2012 & dischmth==6
 }
+assert dischnum_pac==0 if _m==1
+assert dischnum_pac==0 if pacprovid==.
 
 gen date = dofm(ym)
 replace dischyear = year(date) if dischyear==.
