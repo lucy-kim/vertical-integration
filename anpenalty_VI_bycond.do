@@ -1,4 +1,5 @@
-*Examine whether condition-specific penalty pressure changes referral concentration
+*Examine whether penalty pressure for all 3 initial conditions changes referral concentration
+*regression analysis of the penalty pressure on vertical integration
 
 *packages for local linear regression
 net install ivqte, from("https://sites.google.com/site/blaisemelly/")
@@ -20,6 +21,463 @@ loc pnltmax2011 0.01
 
 cd `dta'/Medicare
 
+*-----------------------
+
+*first construct data containing interaction terms of static and dynamic penalty pressure with time variables separately
+
+use anpenalty_VI_agg3c, clear
+
+loc lshref "Share of discharges referred to SNF"
+loc lrefhhi "SNF referral concentration"
+loc lrefhhi_samehrr "Referral concentration among SNFs in the same HRR"
+loc lshsnf_used "Share of SNFs in the market used"
+loc lratio_nsnf "Ratio of # SNFs used in current year to previous year"
+loc lshref_usedbefore "Share of SNF referrals to previouly used SNFs"
+loc lshsnf_used_ag "Share of previously used SNFs used again"
+loc lrefhhi_prevSNFs "Referral HHI among SNFs used in the previous year"
+loc llnsnf_used "Ln Number of SNFs used"
+loc lrefhhi_gr "Growth in referral concentration"
+loc lrefhhi_same_gr "Growth in referral concentration in same-market HRR"
+loc lnnsnf_samehrr  "Log Number of same-HRR SNFs a hospital referred to"
+loc lshref_samehrr "Share of referrals to the same-HRR SNFs"
+loc lvi_snf "Formally own SNF"
+lab var vi_snf "Formally own SNF"
+loc lread30 "30-day readmission rate"
+loc lread30_pac "30-day readmission rate among SNF referred patients"
+loc lden_nsnf_used "Number of SNFs being referred to per case referred"
+
+loc yv vi_snf ln_den_nsnf_used_pp refhhi den_nsnf_used lnreqSNF_80pct shref_bytopSNF
+foreach v of varlist `yv' {
+  loc l`v' "`: var label `v''"
+  des `v'
+}
+
+corr reqSNF_80pct refhhi
+corr shref_bytopSNF refhhi
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr
+*pac_hhi_hrr lnnsnf_hrr_fy
+
+*refhhi refhhi_samehrr lnnsnf_used refhhi_prevSNFs shref_usedbefore shsnf_used_ag shsnf_used ratio_nsnf shref
+
+use anpenalty_VI_agg3c, clear
+
+loc int 2011
+gen spp = ppr`int'
+loc pp spp
+sum `pp' if fy==`int', de
+loc pp_sd: di %9.3f `r(sd)'
+
+/* *create a z-score of penalty pressure
+egen z_`pp' = std(`pp')
+replace `pp' = z_`pp' */
+tab fy, summarize(`pp')
+
+gen sppXpost`int' = `pp'*post`int'
+lab var sppXpost`int' "Static penalty pressure X Post `int'"
+
+gen post13 = fy >= 2013
+gen sppXpost13 = `pp'*post13
+lab var sppXpost13 "Static penalty pressure X Post 2013"
+
+gen post13trend = 0
+replace post13trend = fy - 2012 if fy >= 2013
+gen sppXpost13trend = `pp'*post13trend
+lab var sppXpost13trend "Static penalty pressure X Post-2013 trend"
+
+gen post11trend = 0
+replace post11trend = fy -2010 if fy >= 2011
+gen sppXpost11trend = `pp'*post11trend
+lab var sppXpost11trend "Static penalty pressure X Post-2011 trend"
+
+forval t = 2010/2016 {
+  gen sppX`t' = `pp'*_Ify_`t'
+  lab var sppX`t' "Static penalty pressure X `t'"
+}
+
+table fy, contents(mean ppr sd ppr p75 ppr p25 ppr max ppr)
+
+*create a z-score of penalty pressure
+gen dpp = ppr
+loc pp dpp
+/* gen z_`pp' = .
+forval yr = 2011/2016 {
+qui sum `pp' if fy==`yr'
+replace z_`pp' = (ppr - `r(mean)')/`r(sd)' if fy==`yr'
+}
+replace `pp' = z_`pp'
+tab fy, summarize(`pp') */
+
+gen dppXpost`int' = `pp'*post`int'
+lab var dppXpost`int' "Dynamic penalty pressure X Post `int'"
+
+gen dppXpost13 = `pp'*post13
+lab var dppXpost13 "Dynamic penalty pressure X Post 2013"
+
+gen dppXpost13trend = `pp'*post13trend
+lab var dppXpost13trend "Dynamic penalty pressure X Post-2013 trend"
+
+gen dppXpost11trend = `pp'*post11trend
+lab var dppXpost11trend "Dynamic penalty pressure X Post-2011 trend"
+
+forval t = 2011/2016 {
+  gen dppX`t' = `pp'*_Ify_`t'
+  lab var dppX`t' "Dynamic penalty pressure X `t'"
+}
+
+/* foreach v of varlist dpp spp {
+  foreach n of numlist
+  capture drop x
+  bys fy: egen x = pctile(dpp), p(75)
+  bys fy: gen p75_dpp = dpp >= x
+  replace p75_dpp = 0 if fy < 2011
+
+  capture drop x
+  bys fy: egen x = pctile(dpp), p(50)
+  bys fy: gen p50_dpp = dpp >= x
+  replace p50_dpp = 0 if fy < 2011
+} */
+capture drop x
+foreach v of varlist spp {
+  loc n 75
+  capture drop x`n'
+  bys fy: egen x`n' = pctile(`v'), p(`n')
+  capture drop p`n'_`v'
+  gen p`n'_`v' = `v' >= x`n'
+
+  loc n 25
+  capture drop x`n'
+  bys fy: egen x`n' = pctile(`v'), p(`n')
+  capture drop p`n'_`v'
+  gen p`n'_`v' = `v' >= x`n' & `v' < x75
+
+  drop x25 x75
+}
+foreach v of varlist spp {
+  foreach n of numlist 25 75 {
+    capture drop p`n'_`v'Xpost`int'
+    gen p`n'_`v'Xpost`int' = p`n'_`v' * post`int'
+    forval y = 2010/2016 {
+      gen p`n'_`v'X`y' = p`n'_`v' * _Ify_`y'
+    }
+  }
+}
+
+tsset provid fy
+
+tempfile an
+save `an'
+
+
+*--------------------------
+* for readmission outcome
+loc yv read30_pac den_nsnf_used lnnsnf_used shref refhhi lnreqSNF_80pct shref_bytopSNF
+
+loc int 2011
+loc pnltprs1 sppXpost`int' sppX2010
+loc pnltprs2 sppX20*
+loc pnltprs3 sppXpost`int' sppX2010 dppXpost`int'
+loc pnltprs4 sppX20* dppX20*
+*loc pnltprs3 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13
+*loc pnltprs4 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13trend
+*loc pnltprs5 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13 pnltprsXpost13trend
+
+*own_* urban teaching
+loc sp vi_snf_l  lnnsnf_mkt_samehrr i.gp_beds _Ify_* ses_score black
+/* loc pnltprs1 p75_sppXpost`int' p25_sppXpost`int' p75_sppX2010 p25_sppX2010 */
+
+foreach yv of varlist den_nsnf_used lnreqSNF_80pct shref_bytopSNF refhhi {
+  loc file ols_`yv'
+  capture erase `reg'/`file'.xls
+  capture erase `reg'/`file'.txt
+  capture erase `reg'/`file'.tex
+
+  use `an', clear
+
+  forval n = 2/2 {
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+    *loc pnltprs pnltprsXpost`int'
+    *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+    xtreg `yv' `pnltprs`n'' `sp', cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+
+    if `n'==2 {
+      *save coefficients & 95% CI
+      tempfile `y'_`pp'
+      parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``y'_`pp'', replace)
+    }
+  }
+}
+
+loc file ols_readmit
+capture erase `reg'/`file'.xls
+capture erase `reg'/`file'.txt
+capture erase `reg'/`file'.tex
+
+foreach yv of varlist read30 read30_pac {
+  use `an', clear
+  forval n = 1/4 {
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+    *loc pnltprs pnltprsXpost`int'
+    *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+    xtreg `yv' `pnltprs`n'' `sp', cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+
+    if `n'==2 {
+      *save coefficients & 95% CI
+      tempfile `y'_`pp'
+      parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``y'_`pp'', replace)
+    }
+  }
+}
+*--------------------------
+* for the 3 new outcomes
+
+
+
+*--------------------------
+* for acquiring SNF outcome
+
+*for vi_snf outcome, restrict to hospitals that didn't have own SNF in 2008
+use `an', clear
+sum vi_snf_l if fy==2009
+gen x = vi_snf_l if fy==2009
+bys provid: egen vi_snf2008 = max(x)
+tab vi_snf2008
+keep if vi_snf2008==0
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+loc file ols_other
+capture erase `reg'/`file'.xls
+capture erase `reg'/`file'.txt
+capture erase `reg'/`file'.tex
+
+loc yv vi_snf
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs pnltprsXpost`int'
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+  loc rr: di %9.3f `e(ar2)'
+
+  `out' keep(`pnltprs`n'') addtext(Adjusted R-squared, `rr', Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+use `an_ts', clear
+sum vi_snf_l if fy==2009
+gen x = vi_snf_l if fy==2009
+bys provid: egen vi_snf2008 = max(x)
+tab vi_snf2008
+keep if vi_snf2008==0
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+
+
+*--------------------------
+* for referral HHI outcome
+
+use `an', clear
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+loc yv refhhi
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs pnltprsXpost`int'
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+  loc rr: di %9.3f `e(ar2)'
+
+  `out' keep(`pnltprs`n'') addtext(Adjusted R-squared, `rr', Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+use `an_ts', clear
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+loc yv refhhi
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+*--------------------------
+* for Gini coefficient of SNF referral outcome
+
+use `an', clear
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+loc yv gini
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs pnltprsXpost`int'
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+  loc rr: di %9.3f `e(ar2)'
+
+  `out' keep(`pnltprs`n'') addtext(Adjusted R-squared, `rr', Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+use `an_ts', clear
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr i.gp_beds _Ify_*
+
+loc yv gini
+forval n = 1/2 {
+  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+}
+
+
+*--------------------------
+* for spread of SNF per probability outcome
+loc yv read30_pac ln_den_nsnf_used_pp lnnsnf_used shref refhhi
+
+loc int 2011
+loc pnltprs1 pnltprsXpost`int' pnltprsX2010
+loc pnltprs2 pnltprsX20*
+loc pnltprs3 pnltprsX2010 pnltprsXpost`int' pnltprsXpost11trend
+
+loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr
+
+loc file ols_ln_den_nsnf_used_pp
+capture erase `reg'/`file'.xls
+capture erase `reg'/`file'.txt
+capture erase `reg'/`file'.tex
+
+use `an', clear
+foreach yv of varlist ln_den_nsnf_used_pp {
+  forval n = 1/2 {
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+    *loc pnltprs pnltprsXpost`int'
+    *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+    xtreg `yv' `pnltprs`n'' _Ify_* i.gp_beds `sp', cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+
+    if `n'==3 {
+      *save coefficients & 95% CI
+      tempfile `y'_`pp'
+      parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``y'_`pp'', replace)
+    }
+  }
+}
+
+use `an_ts', clear
+foreach yv of varlist ln_den_nsnf_used_pp {
+  forval n = 1/3 {
+    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
+
+    *loc pnltprs pnltprsXpost`int'
+    *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
+    xtreg `yv' `pnltprs`n'' _Ify_* i.gp_beds `sp', cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
+  }
+}
+
+
+*-----------------------------------------------------------------------------------------
+*persistance of penatly pressure
+
+*standardize the penalty pressure in each each
+use anpenalty_VI_agg3c, clear
+
+*create a z-score of penalty pressure
+loc pp ppr
+gen z_`pp' = .
+forval yr = 2011/2016 {
+  qui sum `pp' if fy==`yr'
+  replace z_`pp' = (ppr - `r(mean)')/`r(sd)' if fy==`yr'
+}
+bys fy: sum z_`pp'
+
+keep provid fy z_`pp'
+drop if fy < 2011
+reshape wide z_`pp', i(provid) j(fy)
+
+forval t = 2011/2016 {
+  lab var z_`pp'`t' "`t'"
+}
+graph matrix z_`pp'2011 z_`pp'2012 z_`pp'2013 z_`pp'2014 z_`pp'2015 z_`pp'2016, half ms(p) maxes(ysc(r(-1 6)) ylab(-1(1)6) xsc(r(-1 6)) xlab(-1(1)6)) ti(Standardized score of predicted penalty rate)
+graph export `gph'/std_pp_scmatrix.eps, replace
+
+*--------------------------
+*trend of probability of referring toSNF
+use `an', clear
+
+graph bar (mean) dischnum, over(fy)
+graph export `gph'/trd_dischnum.eps, replace
+
+graph bar (mean) dischnum_pac, over(fy)
+graph export `gph'/trd_dischnum_pac.eps, replace
 
 *--------------------------
 *inertia in the outcome within a hospital
@@ -43,7 +501,7 @@ graph export `gph'/test2.eps, replace
 *understanding the penalty pressure measures
 use anpenalty_VI_agg3c, clear
 
-forval int = 2011/2012 {
+forval int = 2011/2011 {
   sum ppr if fy==`int', de
   loc p75_`int' = `r(p75)'
   loc p25_`int' = `r(p25)'
@@ -51,18 +509,7 @@ forval int = 2011/2012 {
   di "`int': 25th percentile of predicted penalty rate = `p25_`int''"
 }
 
-forval int = 2011/2012 {
-  replace ppr`int' = ppr`int'*100
-  loc v ppr`int'
-  loc l`v' "`: var label `v''"
-}
-
-replace ppr = 0.01 if fy==2011 & ppr > `pnltmax2011'
-replace ppr = 0.02 if fy==2012 & ppr > `pnltmax2012'
-replace ppr = 0.03 if fy>=2013 & ppr > `pnltmax2013'
-replace ppr = 100*ppr
-
-forval int = 2011/2012 {
+forval int = 2011/2011 {
   loc pp ppr`int'
   gen gp = .
   replace gp = 1 if p75_`pp'==1
@@ -75,15 +522,24 @@ forval int = 2011/2012 {
 }
 
 preserve
-keep gp2011 gp2012 fy diff_ppr2011 ppr2011 diff_ppr2012 ppr2012
+keep gp2011 fy diff_ppr2011 ppr2011 pnltrate_t2
+
+replace pnltrate_t2 = 100* pnltrate_t2
+replace pnltrate_t2 = 0 if fy < 2011
+
 outsheet using `gph'/diff_ppr.csv, comma names replace
 restore
 
+*if the hospital had a high predicted penalty rate in year 2011, 2012, respectively, what was the predicted penalty rate for each year before and after then?
+loc pp ppr
+preserve
+keep if p75_
 
+/*
 preserve
 keep gp fy diff_ppr`int' ppr`int'
 outsheet using `gph'/diff_ppr`int'.csv, comma names replace
-restore
+restore */
 
 preserve
 keep provid fy ppr pnltrate_t2
@@ -138,215 +594,9 @@ areg `y' `pnltprs' _Ify_* i.gp_beds `sp' , absorb(provid) cluster(provid)
 xtreg `y' `pnltprs' _Ify_* i.gp_beds `sp' ,  fe cluster(provid)
 xtserial `y' `pnltprs' _Ify_* _Igp_beds* `sp' ,  output
 
-*-----------------------
-*regression analysis of the penalty pressure on vertical integration
-
-use anpenalty_VI_agg3c, clear
-
-loc lshref "Share of discharges referred to SNF"
-loc lrefhhi "SNF referral concentration"
-loc lrefhhi_samehrr "Referral concentration among SNFs in the same HRR"
-loc lshsnf_used "Share of SNFs in the market used"
-loc lratio_nsnf "Ratio of # SNFs used in current year to previous year"
-loc lshref_usedbefore "Share of SNF referrals to previouly used SNFs"
-loc lshsnf_used_ag "Share of previously used SNFs used again"
-loc lrefhhi_prevSNFs "Referral HHI among SNFs used in the previous year"
-loc llnsnf_used "Ln Number of SNFs used"
-loc lrefhhi_gr "Growth in referral concentration"
-loc lrefhhi_same_gr "Growth in referral concentration in same-market HRR"
-loc lnnsnf_samehrr  "Log Number of same-HRR SNFs a hospital referred to"
-loc lshref_samehrr "Share of referrals to the same-HRR SNFs"
-loc lvi_snf "Formally own SNF"
-lab var vi_snf "Formally own SNF"
-
-loc yv vi_snf ln_den_nsnf_used_pp refhhi
-foreach v of varlist `yv' {
-  loc l`v' "`: var label `v''"
-  des `v'
-}
-
-loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr
-*pac_hhi_hrr lnnsnf_hrr_fy
-
-*1) use the cross-sectional variation across hospitals by  penalty pressure based on 2009-2011 performance
-
-* use post dummy
-
-*refhhi refhhi_samehrr lnnsnf_used refhhi_prevSNFs shref_usedbefore shsnf_used_ag shsnf_used ratio_nsnf shref
-
-loc int 2011
-
-*ppst`int' lppd`int'
-loc pp ppr`int'
-
-use anpenalty_VI_agg3c, clear
-
-replace ppr`int' = `pnltmax`int'' if ppr`int' > `pnltmax`int''
-replace ppr`int' = ppr`int'*100
-sum ppr`int'
-
-sum `pp' if fy==`int', de
-loc pp_sd: di %9.3f `r(sd)'
-
-/* *create a z-score of penalty pressure
-egen z_`pp' = std(`pp')
-replace `pp' = z_`pp' */
-
-gen p75_pnltprsXpost`int' = p75_`pp'Xpost`int'
-lab var p75_pnltprsXpost`int' "Top quartile X Post"
-gen p25_75_pnltprsXpost`int' = p25_75_`pp'Xpost`int'
-lab var p25_75_pnltprsXpost`int' "Middle 2 quartiles X Post"
-gen pnltprsXpost`int' = `pp'*post`int'
-lab var pnltprsXpost`int' "Penalty pressure X Post `int'"
-tab fy, summarize(p75_pnltprsXpost`int')
-
-gen post13 = fy >= 2013
-gen pnltprsXpost13 = `pp'*post13
-lab var pnltprsXpost13 "Penalty pressure X Post 2013"
-
-gen post13trend = 0
-replace post13trend = fy - 2012 if fy >= 2013
-gen pnltprsXpost13trend = `pp'*post13trend
-lab var pnltprsXpost13trend "Penalty pressure X Post-2013 trend"
-
-forval t = 2010/2016 {
-  gen p75_pnltprsX`t' = p75_`pp'X`t'
-  lab var p75_pnltprsX`t' "Top quartile X `t'"
-  gen p25_75_pnltprsX`t' = p25_75_`pp'X`t'
-  lab var p25_75_pnltprsX`t' "Middle 2 quartiles X `t'"
-  gen pnltprsX`t' = `pp'*_Ify_`t'
-  lab var pnltprsX`t' "Penalty pressure X `t'"
-}
-
-tsset provid fy
-
-tempfile an
-save `an'
-
-loc int 2011
-loc pnltprs1 pnltprsXpost`int' pnltprsX2010
-loc pnltprs2 pnltprsX20*
-loc pnltprs3 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13
-loc pnltprs4 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13trend
-loc pnltprs5 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13 pnltprsXpost13trend
-
-loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr
-
-use `an', clear
-foreach yv of varlist read30_pac samh30_pac ln_den_nsnf_used_pp lnnsnf_used shref refhhi {
-  loc file ols_cs_post`int'_`yv'
-  capture erase `reg'/`file'.xls
-  capture erase `reg'/`file'.txt
-  capture erase `reg'/`file'.tex
-  forval n = 1/5 {
-    loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
-
-    *loc pnltprs pnltprsXpost`int'
-    *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
-    xtreg `yv' `pnltprs`n'' _Ify_* i.gp_beds `sp', cluster(provid) fe
-
-    *mean dep var
-    sum `yv' if e(sample)
-    loc mdv: display %9.3f `r(mean)'
-
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
-
-    if `n'==3 {
-      *save coefficients & 95% CI
-      tempfile `y'_`pp'
-      parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``y'_`pp'', replace)
-    }
-  }
-}
-
-*for vi_snf outcome, restrict to hospitals that didn't have own SNF in 2008
-use `an', clear
-sum vi_snf_l if fy==2009
-gen x = vi_snf_l if fy==2009
-bys provid: egen vi_snf2008 = max(x)
-tab vi_snf2008
-keep if vi_snf2008==0
-
-loc sp vi_snf_l own_* urban teaching lnnsnf_mkt_samehrr
-
-loc yv vi_snf
-loc file ols_cs_post`int'_`yv'
-capture erase `reg'/`file'.xls
-capture erase `reg'/`file'.txt
-capture erase `reg'/`file'.tex
-
-forval n = 1/5 {
-  loc out "outreg2 using `reg'/`file'.xls, tex append label ctitle(`l`yv'')"
-
-  *loc pnltprs pnltprsXpost`int'
-  *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
-  xtreg `yv' `pnltprs`n'' _Ify_* i.gp_beds `sp', fe cluster(provid)
-
-  *mean dep var
-  sum `yv' if e(sample)
-  loc mdv: display %9.3f `r(mean)'
-  loc rr: di %9.3f `e(ar2)'
-
-  `out' keep(`pnltprs`n'') addtext(Adjusted R-squared, `rr', Mean dep. var., `mdv', Std dev of penalty pressure, `pp_sd', Hospital FE, Y, Year FE, Y) dec(3) fmt(fc)
-}
-
 *---------------------------------------------
 *regression using time-varying penalty pressure
-loc int 2011
-use anpenalty_VI_agg3c, clear
 
-forval yr = 2011/2016 {
-  replace ppr = `pnltmax`yr'' if ppr > `pnltmax`yr'' & fy==`yr'
-}
-replace ppr = ppr*100
-table fy, contents(mean ppr sd ppr p75 ppr p25 ppr max ppr)
-
-/* *create a z-score of penalty pressure
-loc pp ppr
-egen z_`pp' = std(`pp')
-tab fy, summarize(z_`pp') */
-
-/* loc pp ppr
-gen z_`pp'2 = .
-forval yr = 2011/2016 {
-  qui sum `pp' if fy==`yr'
-  replace z_`pp'2 = (ppr - `r(mean)')/`r(sd)' if fy==`yr'
-}
-tab fy, summarize(z_`pp'2)
-
-replace `pp' = z_`pp'2 */
-
-loc pp ppr
-gen p75_pnltprsXpost`int' = p75_`pp'Xpost`int'
-lab var p75_pnltprsXpost`int' "Top quartile X Post"
-gen p25_75_pnltprsXpost`int' = p25_75_`pp'Xpost`int'
-lab var p25_75_pnltprsXpost`int' "Middle 2 quartiles X Post"
-gen pnltprsXpost`int' = `pp'*post`int'
-lab var pnltprsXpost`int' "Penalty pressure X Post `int'"
-tab fy, summarize(p75_pnltprsXpost`int')
-
-gen post13 = fy >= 2013
-gen pnltprsXpost13 = `pp'*post13
-lab var pnltprsXpost13 "Penalty pressure X Post 2013"
-
-gen post13trend = 0
-replace post13trend = fy - 2012 if fy >= 2013
-gen pnltprsXpost13trend = `pp'*post13trend
-lab var pnltprsXpost13trend "Penalty pressure X Post-2013 trend"
-
-forval t = 2010/2016 {
-  gen p75_pnltprsX`t' = p75_`pp'X`t'
-  lab var p75_pnltprsX`t' "Top quartile X `t'"
-  gen p25_75_pnltprsX`t' = p25_75_`pp'X`t'
-  lab var p25_75_pnltprsX`t' "Middle 2 quartiles X `t'"
-  gen pnltprsX`t' = `pp'*_Ify_`t'
-  lab var pnltprsX`t' "Penalty pressure X `t'"
-}
-
-tsset provid fy
-
-tempfile an_ts
-save `an_ts'
 
 use `an_ts', clear
 
@@ -459,6 +709,44 @@ keep provid fy `sp' statppX20* dynappX20* _Ify_* _Igp_beds*
 compress
 outsheet using anpenalty_VI_agg3c_040518.csv, replace comma names
 
+*-----------------------
+*why 2012 have much fewer SNF referrals?
+use SNFreferral_tchpm, clear
+drop if cond=="HK"
+
+keep provid dischmth dischyr dischnum_pac
+collapse (sum) dischnum_pac, by(provid ym fy)
+tempfile tmp
+save `tmp'
+
+use `an', clear
+keep provid
+duplicates drop
+merge 1:m provid using `tmp', keep(3) nogen
+
+gen sym = string(ym, "%tm")
+labmask ym, values(sym)
+graph bar (mean) dischnum_pac, over(ym, gap(*15) label(angle(90) labsize(tiny)))
+graph export `gph'/trd_dischnum_pac_monthly.eps, replace
+
+
+use index_admit_chm, clear
+drop if cond=="HK"
+
+keep provid dischmth dischyr dischnum_pac
+collapse (sum) dischnum_pac, by(provid ym fy)
+tempfile tmp2
+save `tmp2'
+
+use `an', clear
+keep provid
+duplicates drop
+merge 1:m provid using `tmp', keep(3) nogen
+
+
+use `an', clear
+qqplot refhhi gini
+graph export `gph'/test.eps, replace
 
 *-----------------------
 *export to R to visualize the trend in outcomes for top, middle 2 and bottom quartiles of penalty pressure
@@ -470,6 +758,7 @@ loc yv refhhi shref nsnf_used read* samh*
 
 use SNFreferral_tchpm, clear
 drop if cond=="HK"
+
 drop if dischmth==6
 
 tempfile pac_nojune
@@ -483,12 +772,19 @@ bys provid fy: egen tot = sum(dischnum)
 gen refshsq = (dischnum/tot)^2
 
 *aggregate to the hospital-FY level
-collapse (sum) refhhi = refshsq, by(provid fy)
+collapse (sum) refhhi = refshsq (mean) dischnum_pac= tot, by(provid fy)
 assert refhhi <= 1
 rename refhhi refhhi3
 
 tempfile hosp_fy_ref3
 save `hosp_fy_ref3'
+
+use `an', clear
+keep provid fy
+duplicates drop
+merge 1:1 provid fy using `hosp_fy_ref3', keep(3) nogen
+graph bar (mean) dischnum_pac, over(fy)
+graph export `gph'/trd_dischnum_pac_nj.eps, replace
 
 *2) number of SNFs being referred to
 use `pac_nojune', clear
@@ -557,6 +853,20 @@ save `outc_nojune'
 
 *-----------------------
 
+
+use `an', clear
+keep provid fy ppr2011 den_nsnf_used_pp post2011
+binscatter den_nsnf_used_pp ppr2011 if ppr2011 <1, by(post2011) subti(Number of SNFs being referred to per probability of referral) yti("") xti(Predicted penalty rate in 2011) leg(order(1 "2009-2010" 2 "2011-2016"))
+graph export `gph'/test.eps, replace
+
+
+use `an_ts', clear
+keep provid fy ppr den_nsnf_used_pp post2011
+binscatter den_nsnf_used_pp ppr, by(post2011) subti(Number of SNFs being referred to per probability of referral) yti("") xti(Predicted penalty rate in each year) leg(order(1 "2009-2010" 2 "2011-2016"))
+graph export `gph'/test2.eps, replace
+
+
+*no June
 use `an', clear
 
 loc int 2011
@@ -567,7 +877,7 @@ replace gp = 2 if p25_75_`pp'==1
 replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
 assert gp!=.
 
-/* foreach v of varlist `vl' {
+foreach v of varlist `vl' {
   loc l_`v' : var lab `v'
   drop `v'
 }
@@ -585,10 +895,42 @@ foreach v of varlist den_nsnf_used {
   gen ln_`v'_pp = ln(`v'_pp)
   sum `v'_pp, de
   des `v'_pp
-} */
-
+}
 preserve
 loc yv ln_den_nsnf_used_pp refhhi shref nsnf_used den_nsnf_used_pp read* samh*
+collapse (mean) `yv', by(fy gp)
+
+tempfile out1
+save `out1'
+restore
+
+*for vi_snf outcome, restrict to hospitals that didn't have own SNF in 2008
+preserve
+gen x = vi_snf_l if fy==2009
+bys provid: egen vi_snf2008 = max(x)
+tab vi_snf2008
+keep if vi_snf2008==0
+
+loc yv vi_snf
+collapse (mean) `yv', by(fy gp)
+
+merge 1:1 fy gp using `out1', nogen
+outsheet using `gph'/yv_mean_se_nojune.csv, comma names replace
+restore
+
+
+use `an', clear
+
+loc int 2011
+loc pp ppr`int'
+gen gp = .
+replace gp = 1 if p75_`pp'==1
+replace gp = 2 if p25_75_`pp'==1
+replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
+assert gp!=.
+
+preserve
+loc yv ln_den_nsnf_used_pp refhhi shref nsnf_used den_nsnf_used_pp read* samh* gini
 collapse (mean) `yv', by(fy gp)
 
 tempfile out1
@@ -619,7 +961,7 @@ replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
 replace gp = . if `pp'==.
 tab fy
 
-/* foreach v of varlist `vl' {
+foreach v of varlist `vl' {
   loc l_`v' : var lab `v'
   drop `v'
 }
@@ -637,7 +979,8 @@ foreach v of varlist den_nsnf_used {
   gen ln_`v'_pp = ln(`v'_pp)
   sum `v'_pp, de
   des `v'_pp
-} */
+}
+
 
 preserve
 keep if fy <2011
@@ -661,6 +1004,80 @@ restore
 preserve
 keep if fy >=2011
 loc yv ln_den_nsnf_used_pp refhhi shref nsnf_used den_nsnf_used_pp read* samh*
+collapse (mean) `yv', by(fy gp )
+append using `pre11'
+
+keep gp fy `yv'
+tempfile out1_ts
+save `out1_ts'
+restore
+
+loc yv vi_snf
+gen x = vi_snf_l if fy==2009
+bys provid: egen vi_snf2008 = max(x)
+tab vi_snf2008
+keep if vi_snf2008==0
+
+preserve
+keep if fy < 2011
+
+*get the mean of outcome by grouping based on the 2011 predicted penalty rate
+loc pp ppr`int'
+drop gp
+gen gp = .
+replace gp = 1 if p75_`pp'==1
+replace gp = 2 if p25_75_`pp'==1
+replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
+replace gp = . if `pp'==.
+
+collapse (mean) vi_snf, by(fy gp)
+tab fy gp
+tempfile pre11_2
+save `pre11_2'
+restore
+
+preserve
+keep if fy >=2011
+collapse (mean) vi_snf, by(fy gp)
+append using `pre11_2'
+
+merge 1:1 fy gp using `out1_ts', nogen
+
+outsheet using `gph'/yv_mean_se_ts_nojune.csv, comma names replace
+restore
+
+
+use `an_ts', clear
+loc pp ppr
+gen gp = .
+replace gp = 1 if p75_`pp'==1
+replace gp = 2 if p25_75_`pp'==1
+replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
+replace gp = . if `pp'==.
+tab fy
+
+preserve
+keep if fy <2011
+
+*get the mean of outcome by grouping based on the 2011 predicted penalty rate
+loc pp ppr`int'
+drop gp
+gen gp = .
+replace gp = 1 if p75_`pp'==1
+replace gp = 2 if p25_75_`pp'==1
+replace gp = 3 if p75_`pp'==0 & p25_75_`pp'==0
+replace gp = . if `pp'==.
+
+loc yv ln_den_nsnf_used_pp refhhi shref nsnf_used den_nsnf_used_pp read* samh* gini
+collapse (mean) `yv', by(fy gp)
+tab fy gp
+tempfile pre11
+save `pre11'
+restore
+
+preserve
+keep if fy >=2011
+loc yv ln_den_nsnf_used_pp refhhi shref nsnf_used den_nsnf_used_pp read* samh* gini
 collapse (mean) `yv', by(fy gp )
 append using `pre11'
 
