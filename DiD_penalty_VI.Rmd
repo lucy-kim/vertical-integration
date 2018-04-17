@@ -53,10 +53,7 @@ df <- read.csv("~/Dropbox/Research/VI/output/yv_mean_se.csv")
 # df$gp <- factor(df$gp, levels=c(1,2,3), labels=c("Top quartile", "Middle 2 quartiles", "Bottom quartile"))
 df$gp <- factor(df$gp, levels=c(1,2,3), labels=c("High", "Medium", "Low"))
 
-colnames(df)[12:14] <- c("pread30","pread60","pread90")
-colnames(df)[15:17] <- c("psamh30","psamh60","psamh90")
-
-df2 <- df
+df2 <- subset(df, cond=="Initial")
 
 dl <- c("30-day", "31-60 day", "61-90 day")
 yl <- c("hospital readmission rate", "hospital readmission rate among patients referred to SNF","same hospital return rate among patients referred to SNF")
@@ -130,7 +127,40 @@ ggplot(df2, aes(x=fy, y=vi_snf, linetype=gp)) +
                      breaks= seq(2009,2016,1)) 
 ggsave("~/Dropbox/Research/VI/output/des_vi_snf_bypp.png", width = 15, height=10, units="cm")
 
-ggplot(df2, aes(x=fy, y=shref, linetype=gp)) +
+ggplot(df, aes(x=fy, y=dischnum, linetype=gp)) + facet_grid(.~cond) +
+  geom_point(aes(shape=gp),size=2) +
+  geom_line() + 
+  theme_bw(base_size=13) +
+  labs(x="Year", y="",
+       subtitle="Number of hospital discharges") +
+  theme(legend.position="bottom",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
+         shape=guide_legend(title="Predicted penalty rate in 2011" )) +
+  # scale_y_continuous(limits = c(0.15,0.25),
+  #                    breaks = seq(0.15,0.25, 0.02)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+
+ggplot(df, aes(x=fy, y=dischnum_pac, linetype=gp)) + facet_grid(.~cond) +
+  geom_point(aes(shape=gp),size=2) +
+  geom_line() + 
+  theme_bw(base_size=13) +
+  labs(x="Year", y="",
+       subtitle="Number of hospital discharges referred to SNF") +
+  theme(legend.position="bottom",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
+         shape=guide_legend(title="Predicted penalty rate in 2011" )) +
+  # scale_y_continuous(limits = c(0.15,0.25),
+  #                    breaks = seq(0.15,0.25, 0.02)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+
+
+ggplot(df, aes(x=fy, y=shref, linetype=gp)) + facet_grid(.~cond) +
   geom_point(aes(shape=gp),size=2) +
   geom_line() + 
   theme_bw(base_size=13) +
@@ -141,14 +171,13 @@ ggplot(df2, aes(x=fy, y=shref, linetype=gp)) +
         panel.grid.minor.x = element_blank()) +
   guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
          shape=guide_legend(title="Predicted penalty rate in 2011" )) +
-  scale_y_continuous(limits = c(0.15,0.25),
-                     breaks = seq(0.15,0.25, 0.02)) +
+  # scale_y_continuous(limits = c(0.15,0.25),
+  #                    breaks = seq(0.15,0.25, 0.02)) +
   scale_x_continuous(limits = c(2008.5,2016.5),
                      breaks= seq(2009,2016,1)) 
 ggsave("~/Dropbox/Research/VI/output/des_shref_bypp.png", width = 15, height=10, units="cm")
 
-
-ggplot(df2, aes(x=fy, y=refhhi, linetype=gp)) +
+ggplot(df2, aes(x=fy, y=ppr, linetype=gp)) + facet_grid(.~cond) +
   geom_point(aes(shape=gp),size=2) +
   geom_line() + 
   theme_bw(base_size=13) +
@@ -159,26 +188,43 @@ ggplot(df2, aes(x=fy, y=refhhi, linetype=gp)) +
         panel.grid.minor.x = element_blank()) +
   guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
          shape=guide_legend(title="Predicted penalty rate in 2011" )) +
-  scale_y_continuous(limits = c(0.15,0.25),
-                     breaks = seq(0.15,0.25, 0.05)) +
+  # scale_y_continuous(limits = c(0.15,0.25),
+                     # breaks = seq(0.15,0.25, 0.05)) +
   scale_x_continuous(limits = c(2008.5,2016.5),
                      breaks= seq(2009,2016,1)) 
-ggsave("~/Dropbox/Research/VI/output/des_refhhi_bypp.png", width = 15, height=10, units="cm")
 
 
-ggplot(df2, aes(x=fy, y=ln_den_nsnf_used_pp, linetype=gp)) +
+ggplot(df, aes(x=fy, y=refhhi, linetype=gp)) + facet_grid(.~cond) +
   geom_point(aes(shape=gp),size=2) +
   geom_line() + 
   theme_bw(base_size=13) +
   labs(x="Year", y="",
-       subtitle="Log Number of SNFs being referred to / Probability of referral") +
+       subtitle="SNF referral concentration") +
   theme(legend.position="bottom",
         panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank()) +
   guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
          shape=guide_legend(title="Predicted penalty rate in 2011" )) +
-  scale_y_continuous(limits = c(4,5),
-                     breaks = seq(4,5,0.2)) +
+  # scale_y_continuous(limits = c(0.15,0.25),
+                     # breaks = seq(0.15,0.25, 0.05)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/des_refhhi_bypp.png", width = 15, height=10, units="cm")
+
+
+ggplot(df, aes(x=fy, y=den_nsnf_used, linetype=gp)) + facet_grid(.~cond) +
+  geom_point(aes(shape=gp),size=2) +
+  geom_line() + 
+  theme_bw(base_size=13) +
+  labs(x="Year", y="",
+       subtitle="Ratio of the number of SNFs being referred to to number referral") +
+  theme(legend.position="bottom",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  guides(linetype=guide_legend(title="Predicted penalty rate in 2011"),
+         shape=guide_legend(title="Predicted penalty rate in 2011" )) +
+  # scale_y_continuous(limits = c(4,5),
+  #                    breaks = seq(4,5,0.2)) +
   scale_x_continuous(limits = c(2008.5,2016.5),
                      breaks= seq(2009,2016,1)) 
 ggsave("~/Dropbox/Research/VI/output/des_ln_den_nsnf_used_pp_bypp.png", width = 15, height=10, units="cm")
