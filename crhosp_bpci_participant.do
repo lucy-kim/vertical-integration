@@ -2,8 +2,8 @@
 
 cd /ifs/home/kimk13/VI/data/Medicare/BPCI
 
-/* loc y 2013
-loc q 4
+loc y 2013
+loc q 3
 import excel bpci-analyticfile-q`q'`y'.xlsx, firstrow clear
 
 *keep only Medicare providers
@@ -61,7 +61,7 @@ gen yr = `y'
 compress
 save bpci_q`q'`y', replace
 tempfile bpci_q`q'`y'
-save `bpci_q`q'`y'' */
+save `bpci_q`q'`y''
 
 
 forval y = 2014/2016 {
