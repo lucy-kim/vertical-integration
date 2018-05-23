@@ -4,12 +4,14 @@ loc gph /ifs/home/kimk13/VI/output
 loc reg /ifs/home/kimk13/VI/output
 loc dta /ifs/home/kimk13/VI/data
 loc int 2011
+set maxiter 50
 
 cd `dta'/Medicare
 
 *get 2012-later err's
 use `dta'/hrrp_penalty, clear
 reshape wide payadjr pnltr n_* err_* , i(provid) j(fy)
+drop err_cabg2016
 tempfile penalty
 save `penalty'
 
@@ -21,8 +23,21 @@ replace cond = lower(cond)
 rename n n_
 rename err err_
 reshape wide n_* err_* , i(provid fy) j(cond) string
-
 reshape wide n_* err_* , i(provid) j(fy)
+tempfile err2011
+save `err2011'
+
+*get 2015 err's for CABG only
+use `dta'/Medicare/hosp-compare/err2015, clear
+replace fy = 2016
+keep if cond=="CABG"
+replace cond = lower(cond)
+rename err err_
+reshape wide err_* , i(provid fy) j(cond) string
+reshape wide err_* , i(provid) j(fy)
+drop denom numer
+merge 1:1 provid using `err2011', keep(3) nogen
+
 merge 1:1 provid using `penalty', keep(3) nogen
 codebook err_ami*
 tempfile penalty
@@ -34,6 +49,23 @@ use VI_hospsmpl_agg3c, clear
 
 drop payadjr-pnltr
 merge m:1 provid using `penalty', keep(1 3) nogen
+
+*restrict to hospital-conditions whose mean # discharges over 2009-2010 is at least 25
+capture drop x
+bys provid: egen x = mean(dischnum) if fy < 2011
+bys provid: egen mdischnum = max(x)
+tab fy if mdischnum > 30
+
+keep if mdischnum >= 30
+drop x mdischnum
+
+*drop small hospitals whose min # bed < 30
+bys provid: egen x = min(beds)
+tab fy if x >= 30
+drop if x < 30
+drop x
+tab fy
+*1722 hospitals
 
 tempfile an
 save `an'
@@ -63,19 +95,20 @@ tab fy, summarize(rread) */
 use `an', clear
 rename err*, upper
 
-foreach c in "AMI" "HF" "PN" {
+foreach c in "AMI" "HF" "PN" "HK" "COPD" "CABG" {
   capture drop err_tl3_tl1_`c'
   gen err_tl3_tl1_`c' = .
   forval t = 2011/2016 {
     loc t2 = `t' + 1
-    replace err_tl3_tl1_`c' = ERR_`c'`t2' if fy==`t'
+    capture replace err_tl3_tl1_`c' = ERR_`c'`t2' if fy==`t'
   }
 }
 tab fy, summarize(err_tl3_tl1_AMI)
 tab fy, summarize(err_tl3_tl1_HF)
 tab fy, summarize(err_tl3_tl1_PN)
-*-------------------------------------
-*predict the likelihood of penalty, penalty rate, penalty dollar amount for t+2 using the own performance during {t-3,t-2,t-1}
+tab fy, summarize(err_tl3_tl1_HK)
+tab fy, summarize(err_tl3_tl1_COPD)
+tab fy, summarize(err_tl3_tl1_CABG)
 
 *create penalty status, penalty rate, penalty dollar amount in t+2 for each t
 capture drop penalized_t2
@@ -137,9 +170,10 @@ lab var penalized_t2 "Penalized in t+2"
 lab var pnltrate_t2 "Actual penalty rate in t+2"
 lab var pnltdollar_t2 "Actual penalty amount ($) in t+2"
 
-foreach c in "AMI" "HF" "PN" {
+foreach c in "AMI" "HF" "PN" "HK" "COPD" "CABG"  {
   *lab var rread "`c' Raw readmission rate, {t-3,...,t-1}"
   lab var err_tl3_tl1_`c' "`c' Excess readmission ratio, {t-3,t-2,t-1}"
+  replace err_tl3_tl1_`c' = 0 if err_tl3_tl1_`c'==.
 }
 lab var sum_mcr_pmt_tl2_tl0 "Medicare DRG payment, {t-2,t-1,t}"
 lab var sum_mcr_pmt_tl3_tl1 "Medicare DRG payment, {t-3,t-2,t-1}"
@@ -148,19 +182,14 @@ tempfile tmp2
 save `tmp2'
 
 *-------------
+*predict the likelihood of penalty, penalty rate, penalty dollar amount for t+2 using the own performance during {t-3,t-2,t-1}
+
 *1) likelihood of penalty
 use `tmp2', clear
 
-/* mmp , mean(pr) smoother(lowess) smooptions(bwidth(.6666667)) predictors linear goptions(xsize(9) ysize(10))
-graph export `gph'/test.eps, replace */
-
-/* loc c "AMI"
-npregress kernel penalized_t2_`c' rread if cond=="`c'" & fy==2012, reps(200) seed(12) predict(mean deriv)
-npgraph, msymbol(circle_hollow) msize(large) lineopts(connect(direct) lw(thick))
-graph export `out'/test.eps, replace */
-
 *gen pred_pnltstatus_t2_raw = .
 gen pred_pnltstatus_t2_err = .
+gen pred_pnltstatus_t2_err_c3 = .
 
 *output the logit regression result
 loc file logit_err
@@ -169,77 +198,45 @@ capture erase `reg'/`file'.txt
 capture erase `reg'/`file'.tex
 loc out "outreg2 using `reg'/`file'.xls, tex append label"
 
-*ERR not available for 2011
+loc sp2011 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN
+loc sp2012 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN
+loc sp2013 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN err_tl3_tl1_HK err_tl3_tl1_COPD
+loc sp2014 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN err_tl3_tl1_HK err_tl3_tl1_COPD
+loc sp2015 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN err_tl3_tl1_HK err_tl3_tl1_COPD err_tl3_tl1_CABG
+loc sp2016 err_tl3_tl1_AMI err_tl3_tl1_HF err_tl3_tl1_PN err_tl3_tl1_HK err_tl3_tl1_COPD err_tl3_tl1_CABG
+
+loc int 2011
 forval t = `int'/2016 {
-  logit penalized_t2 err_tl3_tl1* if fy==`t', vce(robust)
+  logit penalized_t2 `sp`t'' if fy==`t', vce(robust)
   loc chi: display %9.2f `e(chi2)'
   loc pv: display %9.2f `e(p)'
 
   `out' ctitle(`t') addtext(LR chi-square test statistic, `chi', LR chi-square test p-value, `pv')
 
   predict err
+  sum err
+
+  gen x = _b[_cons] + _b[err_tl3_tl1_AMI]*err_tl3_tl1_AMI + _b[err_tl3_tl1_HF]*err_tl3_tl1_HF + _b[err_tl3_tl1_PN]*err_tl3_tl1_PN
+  sum x
+  gen x2 = exp(x)/(1+exp(x))
+
+  replace pred_pnltstatus_t2_err_c3 = x2 if fy==`t'
   replace pred_pnltstatus_t2_err = err if fy==`t'
-  drop err
+  drop err x x2
 }
 
-tempfile tmp3
-save `tmp3'
-
-keep provid fy pred_pnltstatus_t2_err
+keep provid fy pred_pnltstatus_t2_err pred_pnltstatus_t2_err_c3
 *pred_pnltstatus_t2_raw
 duplicates drop
 tempfile pred_pnltstatus_t2_err
 save `pred_pnltstatus_t2_err'
 
-*graph the actual penalty status and predicted likelihood of penalty against ERRs for each condition & year
-*create 100 percentiles of the condition-specific ERR
-
-
-* COME BACK to this for visualization ---------------------------------------------
-
-loc t `int'
-loc c "AMI"
-*foreach c in "AMI" "HF" "PN" {
-  use `tmp3', clear
-  drop if  err_tl3_tl1_`c'==0
-  *xtile pctile_`c' = err_tl3_tl1_`c' if fy==`t', nq(20)
-  egen pctile_`c' = cut(err_tl3_tl1_`c'), at(0(0.1)1.5)
-  foreach n of numlist 25 50 75 {
-    bys pctile_`c': egen p`n' = pctile(pred_pnltstatus_t2_err) if fy==`t', p(`n')
-  }
-  bys pctile_`c': egen mean = mean(pred_pnltstatus_t2_err) if fy==`t'
-
-  tw (scatter penalized_t2 err_tl3_tl1_`c' if fy==`t', msymbol(circle_hollow) xsc(r(0 1.5)) xlab(0(0.5)1.5)) (qfitci pred_pnltstatus_t2_err err_tl3_tl1_`c' if fy==`t') , saving(`c'_`t', replace) subti(`t' `c') leg(order(1 "Actual penalty status in t+2 for `c'" 2 "Median predicted likelihood of penalty in t+2") col(1))
-graph export `gph'/test.eps, replace
-
-
-
-forval t = `int'/2016 {
-foreach c in "AMI" "HF" "PN" {
-  use `tmp3', clear
-  drop if  err_tl3_tl1_`c'==0
-    tw (scatter penalized_t2 err_tl3_tl1_`c' if fy==`t', msymbol(circle_hollow) xsc(r(0 1.5)) xlab(0(0.5)1.5)) || (line pred_pnltstatus_t2_err err_tl3_tl1_`c' if fy==`t', sort), saving(`c'_`t', replace) subti(`t' `c') leg(order(1 "Actual penalty status in t+2 for `c'" 2 "Predicted likelihood of penalty in t+2") col(1))
-  }
-  grc1leg AMI_`t'.gph HF_`t'.gph PN_`t'.gph
-  *grc1leg `c'_`int'.gph `c'_2013.gph `c'_2014.gph `c'_2015.gph `c'_2016.gph,
-  graph export `gph'/pred_pnltstatus_t2_err`t'.eps, replace
-}
-
-foreach c in "AMI" "HF" "PN" {
-  forval t = `int'/2016 {
-    tw (scatter penalized_t2 err_tl3_tl1_`c' if fy==`t', msymbol(circle_hollow) xsc(r(0 1.5)) xlab(0(0.5)1.5)) (line pred_pnltstatus_t2_err err_tl3_tl1_`c' if fy==`t', sort), saving(`c'_`t', replace) subti(`t' `c') leg(order(1 "Actual penalty status in t+2 for `c'" 2 "Predicted likelihood of penalty in t+2") col(1))
-  }
-  grc1leg `c'_`int'.gph `c'_2013.gph `c'_2014.gph `c'_2015.gph `c'_2016.gph,
-  graph export `gph'/`c'_pred_pnltstatus_t2_err.eps, replace
-}
-
-
-
 *-------------
 *2) predicted penalty rate for t+2 using the own performance during {t-3,t-2,t-1}
-use `tmp3', clear
+use `tmp2', clear
 
 gen pred_pnltrate_t2_err = .
+gen pred_pnltrate_t2_err_c3 = .
 
 *output the GLM regression result
 loc file glm_pr_err
@@ -250,7 +247,8 @@ loc out "outreg2 using `reg'/`file'.xls, tex append label"
 
 *ERR not available for 2011
 forval t = `int'/2016 {
-  glm pnltrate_t2 err_tl3_tl1_* if fy==`t', family(binomial) link(logit) vce(robust) nolog
+  *glm pnltrate_t2 `sp`t'' if fy==`t', family(binomial) link(logit) vce(robust) nolog
+  twopm pnltrate_t2 `sp`t'' if fy==`t', firstpart(logit) secondpart(glm, family(gamma) link(log)) vce(robust)
   loc chi: display %9.2f `e(chi2)'
   loc pv: display %9.2f `e(p)'
 
@@ -258,27 +256,27 @@ forval t = `int'/2016 {
 
   predict err
   replace pred_pnltrate_t2_err = err if fy==`t'
+  sum err
+  drop err
+
+  preserve
+  foreach v of varlist err_tl3_tl1_HK err_tl3_tl1_COPD err_tl3_tl1_CABG {
+    replace `v'= 0
+  }
+  predict err
+  sum err
+  keep provid fy err
+  tempfile yhat
+  save `yhat'
+  restore
+
+  merge 1:1 provid fy using `yhat', nogen
+
+  replace pred_pnltrate_t2_err_c3 = err if fy==`t'
   drop err
 }
 
-/* *graph the actual penalty rate and predicted penalty rate against ERRs for each condition & year
-foreach c in "AMI" "HF" "PN" {
-  lab var err_tl3_tl1 "Risk-standardized readmission rate"
-  sum err_tl3_tl1 if cond=="`c'"
-  loc xmax : di %9.1f `r(max)'
-  loc xmax : di %9.1f `r(max)'
-  sum pred_pnltrate_t2_err if cond=="`c'"
-  loc ymax : di %9.1f `r(max)'
-  di "x-axis max: `xmax', x-axis max: `xmax', y-axis max: `ymax'"
-
-  forval t = `int'/2016 {
-    tw (scatter pnltrate_t2 err_tl3_tl1 if cond=="`c'" & fy==`t', msymbol(circle_hollow) ysc(r(0 `ymax')) ylab(0(0.2)`ymax') xsc(r(`xmax' `xmax')) xlab(`xmax'(0.2)`xmax') ) (line pred_pnltrate_t2_err err_tl3_tl1 if cond=="`c'" & fy==`t', sort ysc(r(0 `ymax')) ylab(0(0.2)`ymax') xsc(r(`xmax' `xmax')) xlab(`xmax'(0.2)`xmax')), saving(`c'_`t', replace) subti(`t' `c') leg(order(1 "Actual penalty rate in t+2 for `c'" 2 "Predicted penalty rate in t+2 for `c'") col(1))
-  }
-  grc1leg `c'_`int'.gph `c'_2013.gph `c'_2014.gph `c'_2015.gph `c'_2016.gph,
-  graph export `gph'/`c'_pred_pnltrate_t2_err.eps, replace
-} */
-
-keep provid fy pred_pnltrate_t2_err
+keep provid fy pred_pnltrate_t2_err pred_pnltrate_t2_err_c3
 duplicates drop
 tempfile pred_pnltrate_t2_err
 save `pred_pnltrate_t2_err'
@@ -287,6 +285,7 @@ save `pred_pnltrate_t2_err'
 use `tmp2', clear
 
 gen pred_pnltdollar_t2_err = .
+gen pred_pnltdollar_t2_err_c3 = .
 
 *output the GLM regression result
 loc file glm_pd_err
@@ -297,7 +296,7 @@ loc out "outreg2 using `reg'/`file'.xls, tex append label"
 
 *ERR not available for 2011
 forval t = `int'/2016 {
-  twopm pnltdollar_t2 err_tl3_tl1_* if fy==`t', firstpart(logit) secondpart(glm, family(gamma) link(log)) vce(robust)
+  twopm pnltdollar_t2 `sp`t'' if fy==`t', firstpart(logit) secondpart(glm, family(gamma) link(log)) vce(robust)
   loc chi: display %9.2f `e(chi2)'
   loc pv: display %9.2f `e(p)'
 
@@ -305,37 +304,27 @@ forval t = `int'/2016 {
 
   predict err
   replace pred_pnltdollar_t2_err = err if fy==`t'
+  sum err
+  drop err
+
+  preserve
+  foreach v of varlist err_tl3_tl1_HK err_tl3_tl1_COPD err_tl3_tl1_CABG {
+    replace `v'= 0
+  }
+  predict err
+  sum err
+  keep provid fy err
+  tempfile yhat
+  save `yhat'
+  restore
+
+  merge 1:1 provid fy using `yhat', nogen
+
+  replace pred_pnltdollar_t2_err_c3 = err if fy==`t'
   drop err
 }
 
-/* *graph the actual penalty rate and predicted penalty rate against ERRs for each condition & year
-replace pnltdollar_t2 = pnltdollar_t2/100000
-replace pred_pnltdollar_t2_err = pred_pnltdollar_t2_err/100000
-
-loc incAMI 10
-loc incHF 50
-loc incPN 5
-
-foreach c in "AMI" "HF" "PN" {
-  lab var err_tl3_tl1 "Risk-standardized readmission rate"
-  sum err_tl3_tl1 if cond=="`c'"
-  loc xmax : di %9.1f `r(max)'
-  loc xmax : di %9.1f `r(max)'
-
-  sum pred_pnltdollar_t2_err if cond=="`c'"
-  loc ymax : di %9.1f `r(max)'
-  di "x-axis max: `xmax', x-axis max: `xmax', y-axis max: `ymax'"
-
-  loc axis ysc(r(0 `ymax')) ylab(0(`inc`c'')`ymax') xsc(r(`xmax' `xmax')) xlab(`xmax'(0.2)`xmax')
-
-  forval t = `int'/2016 {
-    tw (scatter pnltdollar_t2 err_tl3_tl1 if cond=="`c'" & fy==`t', msymbol(circle_hollow) `axis') (line pred_pnltdollar_t2_err err_tl3_tl1 if cond=="`c'" & fy==`t', sort `axis'), saving(`c'_`t', replace) subti(`t' `c') leg(order(1 "Actual penalty amount ($100,000s) in t+2 for `c'" 2 "Predicted penalty amount ($100,000s) in t+2 for `c'") col(1))
-  }
-  grc1leg `c'_2012.gph `c'_2013.gph `c'_2014.gph `c'_2015.gph `c'_2016.gph,
-  graph export `gph'/`c'_pred_pnltdollar_t2_err.eps, replace
-} */
-
-keep provid fy pred_pnltdollar_t2_err
+keep provid fy pred_pnltdollar_t2_err pred_pnltdollar_t2_err_c3
 duplicates drop
 tempfile pred_pnltdollar_t2_err
 save `pred_pnltdollar_t2_err'
@@ -348,15 +337,18 @@ foreach df in "pred_pnltdollar_t2_err" "pred_pnltrate_t2_err" "pred_pnltstatus_t
 }
 
 *for pre-years, recode predicted penalty rate to 0
-foreach v of varlist pred_pnltdollar_t2_err pred_pnltrate_t2_err pred_pnltstatus_t2_err {
+foreach v of varlist pred_pnltdollar_t2_err pred_pnltdollar_t2_err_c3 pred_pnltrate_t2_err pred_pnltrate_t2_err_c3 pred_pnltstatus_t2_err pred_pnltstatus_t2_err_c3 {
   replace `v' = 0 if fy < `int' & `v'==.
 }
 
 rename pred_pnltstatus_t2_err ppst
 rename pred_pnltrate_t2_err ppr
 rename pred_pnltdollar_t2_err ppd
+rename pred_pnltdollar_t2_err_c3 ppd_c3
+rename pred_pnltstatus_t2_err_c3 ppst_c3
+rename pred_pnltrate_t2_err_c3 ppr_c3
 
-foreach v of varlist ppd {
+foreach v of varlist ppd ppd_c3 {
   gen l`v' = ln(`v' + 1)
 }
 
@@ -366,12 +358,21 @@ lab var ppd "Predicted penalty amount ($)"
 lab var lppd "Log Predicted penalty amount ($)"
 tab fy, summarize(lppd)
 
+lab var ppst_c3 "Predicted likelihood of penalty based on AMI, HF, PN"
+lab var ppr_c3 "Predicted penalty rate based on AMI, HF, PN"
+lab var ppd_c3 "Predicted penalty amount ($) based on AMI, HF, PN"
+lab var lppd_c3 "Log Predicted penalty amount ($) based on AMI, HF, PN"
+
 local lppst "Predicted likelihood of penalty"
 local lppr "Predicted penalty rate"
 local llppd "Log Predicted penalty amount ($)"
+loc ppst_c3 "Predicted likelihood of penalty based on AMI, HF, PN"
+loc ppr_c3 "Predicted penalty rate based on AMI, HF, PN"
+loc ppd_c3 "Predicted penalty amount ($) based on AMI, HF, PN"
+loc lppd_c3 "Log Predicted penalty amount ($) based on AMI, HF, PN"
 
-* 1) cross-sectional variation: use the 2011 readmissions penalty pressure based on 2009-2011 performance
-foreach v of varlist ppst ppr lppd  {
+*cross-sectional variation: create static penalty pressure using the 2011 readmissions penalty pressure based on 2009-2011 performance
+foreach v of varlist ppst ppr lppd ppst_c3 ppr_c3 lppd_c3 {
   capture drop x
   capture drop `v'`int'
   gen x = `v' if fy==`int'
@@ -379,9 +380,10 @@ foreach v of varlist ppst ppr lppd  {
   lab var `v'`int' "`l`v'' in `int'"
 }
 tab fy, summarize(lppd`int')
+tab fy, summarize(lppd_c3`int')
 drop x
 
-*use 2012
+/* *use 2012
 loc int 2012
 foreach v of varlist ppst ppr lppd  {
   capture drop x
@@ -391,7 +393,7 @@ foreach v of varlist ppst ppr lppd  {
   lab var `v'`int' "`l`v'' in `int'"
 }
 tab fy, summarize(lppd`int')
-drop x
+drop x */
 
 compress
 save predict_pnltprs_agg3c, replace
