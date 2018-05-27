@@ -24,7 +24,7 @@ drop if beds==.
 duplicates tag provid fy, gen(dup)
 assert dup==0
 drop dup
-
+/*
 *restrict to hospital-conditions whose mean # referrals to SNF over 2009-2010 is at least 30
 capture drop mdischnum_pac x
 bys provid: egen x = mean(dischnum_pac) if fy < 2011
@@ -32,17 +32,10 @@ bys provid: egen mdischnum_pac = max(x)
 sum mdischnum_pac, de
 *median is 43.5
 tab fy if mdischnum_pac > 30
-*1763 hospitals
+*1763 hospitals*/
 
-*restrict to hospital-conditions whose mean # discharges over 2009-2010 is at least 25
-capture drop x
-bys provid: egen x = mean(dischnum) if fy < 2011
-bys provid: egen mdischnum = max(x)
-tab fy if mdischnum > 25
-bys fy: sum mdischnum if mdischnum_pac > 30
-table fy if mdischnum_pac > 30, content(p25 mdischnum p50 mdischnum p75 mdischnum)
 
-*what is the penalty
+/*what is the penalty
 capture drop x
 gen x = pnltr > 0 if fy==2013
 bys provid: egen penalized2013 = max(x)
@@ -51,28 +44,8 @@ gen x = pnltr if fy==2013
 bys provid: egen pnltr2013 = max(x)
 table fy if mdischnum_pac > 30, content(mean penalized2013 mean pnltr2013)
 table fy, content(mean penalized2013 mean pnltr2013)
-*if restrict to hospitals with at least 50 referrals, the
+*if restrict to hospitals with at least 50 referrals, the */
 
-*also restrict to hospitals that appeared throught 2008-2016
-capture drop x
-gen x = dischnum > 0
-bys provid: egen sx = sum(x)
-tab sx
-tab fy if sx < 8
-
-tab fy
-*3342 hospitals
-keep if mdischnum_pac >= 30 & sx==8
-tab fy
-*1726 hospitals
-
-*drop small hospitals whose min # bed < 30
-capture drop x
-bys provid: egen x = min(beds)
-tab fy if x >= 30
-drop if x < 30
-tab fy
-*1722 hospitals
 
 *drop hospital if # referrals==1 or 0 for any one of the years
 capture drop x
@@ -84,8 +57,19 @@ sort provid fy
 list provid fy dischnum_pac if provid==330224
 drop if x < 2
 
+*also restrict to hospitals that appeared throught 2008-2016
+capture drop x
+gen x = dischnum > 0
+bys provid: egen sx = sum(x)
+tab sx
+tab fy if sx < 8
+
 tab fy
-*1720 hospitals
+*3342 hospitals
+keep if sx==8
+tab fy
+*1726 hospitals
+
 
 *referral HHI should be missing, not zero, if dischnum_pac = 0
 foreach v of varlist refhhi* {
@@ -131,14 +115,17 @@ lab var dissh "DSH payment"
 lab var mcr_pmt "Medicare DRG payment ($)"
 lab var tot_pat_rev "Total patient revenue ($)"
 
-*drop 6 hospitals that didn't use SNFs previously
+/* *drop 6 hospitals that didn't use SNFs previously
 gen x = refhhi_prevSNFs==.
 bys provid: egen noprevSNF =max(x)
 drop if noprevSNF==1
-drop x noprevSNF
+drop x noprevSNF */
 
 tempfile tmp
 save `tmp'
+compress
+save VI_hospsmpl_agg3c, replace
+
 *--------------------------------
 *before matching, compare characteristics of penalzied & non-penalized hospitals
 use `tmp', clear

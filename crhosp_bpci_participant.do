@@ -2,13 +2,107 @@
 
 cd /ifs/home/kimk13/VI/data/Medicare/BPCI
 
+*for 2013, Q4 is the earliest quarter
 loc y 2013
+loc q 4
+import excel bpci-analyticfile-q`q'`y'.xlsx, firstrow clear
+
+capture keep if EpisodeStatus=="Phase II"
+
+drop if CCN=="blank" | CCN=="None Given" | CCN=="" | CCN=="Blank"
+
+keep CCN
+duplicates drop
+
+gen bpci = 1
+
+gen fy = `y'+1
+
+tempfile f_q`q'`y'
+save `f_q`q'`y''
+*------------------------
+loc y 2014
 loc q 3
 import excel bpci-analyticfile-q`q'`y'.xlsx, firstrow clear
 
+keep if EpisodeStatus=="Phase II"
+
+drop if CCN=="blank" | CCN=="None Given" | CCN=="" | CCN=="Blank"
+
+*EpisodeName shows DRGs for bundled payments
+keep CCN
+duplicates drop
+
+gen bpci = 1
+
+gen fy = `y'+1
+
+tempfile f_q`q'`y'
+save `f_q`q'`y''
+
+*------------------------
+loc y 2015
+loc q 3
+import excel bpci-analyticfile-q`q'`y'.xlsx, firstrow clear
+
+keep if EpisodeStatus=="Phase II"
+
+drop if CCN=="blank" | CCN=="None Given" | CCN=="" | CCN=="Blank"
+
+*EpisodeName shows DRGs for bundled payments
+keep CCN
+duplicates drop
+
+gen bpci = 1
+
+gen fy = `y'+1
+
+tempfile f_q`q'`y'
+save `f_q`q'`y''
+
+*------------------------
+loc y 2016
+loc q 3
+import excel bpci-analyticfile-q`q'`y'.xlsx, firstrow clear
+
+loc v "CCN"
+capture rename Participant`v' `v'
+
+drop if CCN=="blank" | CCN=="None Given" | CCN=="" | CCN=="Blank"
+
+*Phase I participants transition to Phase II
+keep if EpisodeStatus=="Phase II"
+
+*EpisodeName shows DRGs for bundled payments
+keep CCN
+duplicates drop
+
+gen bpci = 1
+
+gen fy = `y'+1
+
+tempfile f_q`q'`y'
+save `f_q`q'`y''
+*------------------------
+*append data
+use `f_q42013', clear
+forval y = 2014/2016 {
+    append using `f_q3`y''
+}
+
+tab fy
+desc
+
+compress
+save hosp_bpci_participant, replace
+
+
+
+/*
+
 *keep only Medicare providers
-keep if MedicareProvi~r=="Yes"
-drop MedicareProvi~r
+keep if MedicareProvi=="Yes"
+drop MedicareProvi
 
 capture rename ParticipantMo~l Model
 capture rename ParticipantAddressLine1
@@ -18,7 +112,7 @@ foreach v in "Model" "AddressLine1" "Name" "City" "State" "CCN" {
 drop if CCN=="blank" | CCN=="None Given" | CCN=="" | CCN=="Blank"
 drop *Address*
 bys CCN: gen a = _N
-tab a
+assert a==1
 *80% hospitals have 48 bundles
 drop a
 
@@ -295,7 +389,4 @@ forval y = 2013/2017 {
   forval q = 1/4 {
     capture append using `bpci_q`q'`y''
   }
-}
-
-compress
-save hosp_bpci_participant, replace
+} */

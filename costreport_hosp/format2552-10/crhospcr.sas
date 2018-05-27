@@ -36,7 +36,7 @@ x "cd /home/hcmg/kunhee/Labor/Bayada_data";
 
         proc print data=xx (obs=6);
 
-        proc transpose data=xx out=library.nmrc&year.t (drop = _NAME_);
+        proc transpose data=xx out=library.nmrc&year.t (drop = _NAME_) LET;
             by rpt_rec_num;
             var itm_val_num;
             id varname;

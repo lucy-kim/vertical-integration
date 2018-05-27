@@ -21,7 +21,7 @@ qsub hospcr.sh
 Note: Change the working directory inside individual code files.
 
 ## Setting up aggregate Medicare data
-We use hospital-month-condition level index admissions data (for the hospital readmissions penalty) and hospital-month-condition-PAC provider level referral data (where referrals are defined as starting PAC within 2 days from hospital discharge).
+We use hospital-month-condition level index admissions data and hospital-month-condition-PAC provider level referral data (where referrals are defined as starting PAC within 2 days from hospital discharge after matched).
 
 1. `crindex_admit_chm.do`
   - create hospital-month-condition level index admissions data from the raw CSV file
@@ -32,11 +32,6 @@ We use hospital-month-condition level index admissions data (for the hospital re
   - Import hospital-month-condition-PAC provider level referral data separately for HHA and SNF
   - HHA data available for 2010/7 - 2016/6 except 2012/6 (just not avail.)
   - SNF data available for 2008/1 - 2016/6 except 2012/6 (just not avail.)
-4. `crindex_admit_DRG_chm.do`
-  - Create hospital-FY-condition-DRG level index admissions data
-  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
-5. `crinpat_pmt_hosp_fy_drg.do`
-  - Create hospital-FY-condition level data on Medicare inpatient payment by combining the DRG-level counts from our internal Medicare data with the public DRG-level average payment payment data from CMS
 6. `hospcr.sh` in `costreport_hosp` directory
   - Get hospital characteristics and total patient revenues for each FY from CMS Cost Report data
 7. `crhosp_chars_cr.do`
@@ -90,3 +85,8 @@ We use hospital-month-condition level index admissions data (for the hospital re
 3. `crpenalty_VI_bycond.do`
 1. `anpenalty_VI_bycond.do`
 3. `anpenalty_VI_tripleDD.do`
+4. `crindex_admit_DRG_chm.do`
+  - Create hospital-FY-condition-DRG level index admissions data
+  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
+5. `crinpat_pmt_hosp_fy_drg.do`
+  - Create hospital-FY-condition level data on Medicare inpatient payment by combining the DRG-level counts from our internal Medicare data with the public DRG-level average payment payment data from CMS

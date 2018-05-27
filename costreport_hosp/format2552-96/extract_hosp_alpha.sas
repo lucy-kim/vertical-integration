@@ -119,4 +119,4 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
 
       %end;
     %mend;
-    %loop(fyear=2007,lyear=2011);
+    %loop(fyear=2000,lyear=2006);

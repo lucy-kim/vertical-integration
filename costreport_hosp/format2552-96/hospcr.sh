@@ -22,7 +22,7 @@ sas -nodms -noterminal extract_hosp_alpha.sas
 sas -nodms -noterminal crhospcr.sas
 
 # # Create hospital panel data for each calendar year
-stata-se -q -b do crhospcr_panel_1996_2011.do
+# stata-se -q -b do crhospcr_panel_1996_2011.do
 
 # # # For hospital-CY, get vertical integration measures: dummy for VI, mix of PACs if VI=1, # providers per PAC type
 # stata-se -q -b do hospvi_measure.do

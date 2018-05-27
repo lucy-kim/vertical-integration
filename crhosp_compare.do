@@ -4,6 +4,7 @@ loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare/hosp-compare
 
+* get ERRs based on 2008-2010 data
 loc f "hospcompare_read_201107"
 insheet using `f'.csv, clear comma names
 
@@ -28,24 +29,94 @@ replace cond = "HF" if cond=="Heart Failure"
 replace cond = "PN" if cond=="Pneumonia"
 
 drop measure footnote category
+destring provid, ig("'") replace
 
 gen fy = 2011
 tempfile read0810
 save `read0810'
 
 *-----------------------
+*national readmission rate for 2008-2010
 
-loc f "hospcompare_read_201307"
+loc f "hospcompare_read_201107_national"
 insheet using `f'.csv, clear comma names
 
-gen condition = "HF" if measurename=="Heart Failure (HF) 30-Day Readmissions"
-replace cond = "AMI" if measurename=="Acute Myocardial Infarction (AMI) 30-Day Readmissions"
-replace cond = "PN" if measurename=="Pneumonia (PN) 30-Day Readmissions"
-drop measurename
+replace cond = "AMI" if cond=="Heart Attack"
+replace cond = "HF" if cond=="Heart Failure"
+replace cond = "PN" if cond=="Pneumonia"
 
-foreach v of varlist excessreadmis-numberofreadm {
-  replace `v' = "" if `v'=="N/A"
-  capture destring `v', replace
-}
+keep if regexm(measure, "Readmission")
+keep cond rate
 
-drop footnote
+merge 1:m cond using `read0810', nogen
+
+gen err = read / rate
+rename read numer
+rename rate denom
+
+keep cond provid err fy n_pats numer denom
+duplicates drop
+rename n_pats n
+
+compress
+save err2011, replace
+*-----------------------
+* get ERRs for CABG 2015 based on 2012-2014 data (from 2015 data)
+
+loc f "Readmissions and Deaths - Hospital"
+insheet using "HOSArchive_Revised_FlatFiles_20150716/`f'.csv", clear comma
+tab measurename if regexm(measurename, "admission")
+keep if regexm(measurename, "admission")
+
+*provider with "F" are VAs - drop them
+gen x = real(provid)
+drop if x==.
+
+keep provid measurename measureid measure*date score
+
+gen cond = "AMI" if regexm(measureid, "AMI")
+replace cond = "CABG" if regexm(measureid, "CABG")
+replace cond = "COPD" if regexm(measureid, "COPD")
+replace cond = "HF" if regexm(measureid, "HF")
+replace cond = "PN" if regexm(measureid, "PN")
+replace cond = "HK" if regexm(measureid, "HIP_KNEE")
+
+keep if cond!=""
+rename provid provid
+rename score read
+keep provid cond read
+
+destring read, replace ig("Not Available")
+
+tempfile numer
+save `numer'
+
+loc f "Readmissions and Deaths - National"
+insheet using "HOSArchive_Revised_FlatFiles_20150716/`f'.csv", clear comma
+tab measurename if regexm(measurename, "admission")
+keep if regexm(measurename, "admission")
+
+keep measurename measureid measure*date nationalrate
+
+gen cond = "AMI" if regexm(measureid, "AMI")
+replace cond = "CABG" if regexm(measureid, "CABG")
+replace cond = "COPD" if regexm(measureid, "COPD")
+replace cond = "HF" if regexm(measureid, "HF")
+replace cond = "PN" if regexm(measureid, "PN")
+replace cond = "HK" if regexm(measureid, "HIP_KNEE")
+
+rename nationalrate rate
+keep cond rate
+keep if cond!=""
+destring rate, replace
+
+merge 1:m cond using `numer', nogen
+
+gen err = read / rate
+rename read numer
+rename rate denom
+gen fy = 2015
+destring provid, replace
+
+compress
+save err2015, replace

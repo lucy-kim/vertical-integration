@@ -80,6 +80,7 @@ tempfile ref
 save `ref'
 
 use index_admit_chm, clear
+drop if cond=="HK"
 merge m:1 provid using `hosp_keep', keep(3) nogen
 
 collapse (sum) dischnum-read90 (mean) ses_score, by(provid fy)

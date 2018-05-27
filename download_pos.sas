@@ -13,5 +13,4 @@ x "rm -f *zip";
 %end;
 %mend download;
 
-%download(2006,2010);
-%download(2016,2016);
+%download(2005,2016);

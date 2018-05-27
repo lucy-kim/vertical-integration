@@ -5,16 +5,25 @@ cd `dta'/pos
 
 *---------------------------------
 *hospital POS panel data
-forval yr = 2011/2016 {
+forval yr = 2005/2016 {
+    di "Year `yr'----------------------------------------"
     use pos`yr', clear
+
     *keep hospitals
+    capture rename prov0075 prvdr_ctgry_cd
     keep if prvdr_ctgry_cd=="01"
 
     *keep short-term hosptials
-    keep if prvdr_ctgry_s=="1"
+    capture rename prov0085 prvdr_ctgry_sbtyp_cd
+    keep if prvdr_ctgry_sbtyp_cd=="01" | prvdr_ctgry_sbtyp_cd=="1"
 
-    keep prvdr_num fac_name crtfd_bed_cnt gnrl_cntl_typ
-    rename prvdr_num provid
+    capture rename prov1680 provid
+    capture rename prvdr_num provid
+    capture rename prov0475 fac_name
+    capture rename prov0755 crtfd_bed_cnt
+    capture rename prov2885 gnrl_cntl_typ
+
+    keep provid fac_name crtfd_bed_cnt gnrl_cntl_typ
     destring provid, replace
 
     gen fy = `yr'
@@ -29,8 +38,8 @@ forval yr = 2011/2016 {
 }
 
 * Append POS data across FY
-use `y2011', clear
-forval yr = 2012/2016 {
+clear
+forval yr = 2005/2016 {
     append using `y`yr''
 }
 

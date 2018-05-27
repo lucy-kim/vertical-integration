@@ -16,6 +16,762 @@ source("~/Dropbox/Research/VI/vertical-integration/ggplot_smooth_func.R")
 
 ```
 
+
+# how good is our penalty pressure?
+```{r}
+# scatterplot of predicted penalty rate & actual penalty rate in t+2 (add correlation coefficient)
+df <- read.csv("~/Dropbox/Research/VI/output/predict_pnltprs.csv")
+
+df$provid <- factor(df$provid)
+
+df[,c(2,4, 6:11)] <- 100*df[,c(2,4, 6:11)]
+
+corr(df$pnltr2013, df$ppr)
+
+# simple scatterplot of the predicted vs actual penalty rate
+ggplot(df, aes(x=ppr, y=pnltr2013)) + 
+  geom_point(shape = 1) + 
+  # stat_smooth_func(geom="text",xpos = 2, ypos = 0.2,method="lm",hjust=0,parse=TRUE) +
+  # geom_smooth(method="lm",se=FALSE) +
+  geom_abline(aes(intercept=0, slope=1), alpha = 0.2) +
+  labs(x="Expected penalty rate (%)", y="Actual penalty rate (%)") + 
+  theme_bw(base_size = 20) + 
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/ppr_realp.pdf", width =15, height=15, units="cm")
+
+# simple density comparison
+library(reshape2)
+df2 <- melt(df, id.vars = c("provid"))    
+df2 <- subset(df2, variable=="pnltr2013" | variable=="ppr")
+df2$variable <- factor(df2$variable, labels = c("Actual penalty rate", "Expected penalty rate"))
+
+ggplot(df2, aes(value)) + facet_grid(.~variable) +
+  geom_histogram(bins=10) +
+  # geom_density(aes(ppr), colour="black", linetype="dashed") +
+  labs(x="Penalty rate (%)", y="Number of hospitals") +
+  theme_bw(base_size = 20) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) 
+ggsave("~/Dropbox/Research/VI/output/ppr_realp_hist.pdf", width =25, height=15, units="cm")
+  
+  
+  
+# simple scatterplot of the predicted vs actual penalty rate
+ggplot(df, aes(x=ppst, y=penalized_t2)) + 
+  geom_point(shape = 1) + 
+  # stat_smooth_func(geom="text",xpos = 2, ypos = 0.2,method="lm",hjust=0,parse=TRUE) +
+  # geom_smooth(method="lm",se=FALSE) +
+  geom_abline(aes(intercept=0, slope=1), alpha = 0.2) +
+  labs(x="Predicted likelihood of penalty", y="Penalized") + 
+  theme_bw(base_size = 13) + 
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+  
+
+df2 <- subset(df, fy==2011)
+df2$ppr11D <- cut(df2$ppr, breaks=c(quantile(df2$ppr, probs = seq(0, 1, by = 0.25), na.rm=TRUE)),
+  labels=c("0-25","25-50","50-75","75-100"), include.lowest=TRUE)
+df2$gp <- ifelse(df2$ppr11D=="75-100",1, ifelse(df2$ppr11D=="0-25",3,2))
+df2$gp <- factor(df2$gp, levels=c(1,2,3), labels=c("High", "Medium", "Low"))
+# 
+# 
+# df3 <- ddply(df2, .(ppr11D), summarise, m = mean(ppr))
+# df2 <- merge(df2,df3, by="ppr11D", all.x=TRUE)
+df2 <- df2[c("gp", "provid")]
+
+df <- merge(df, df2, by="provid", all.x=TRUE)
+
+df2 <- subset(df, fy >=2011)
+
+lm_eqn <- function(df,y,x){
+    m <- lm(y ~ x, df);
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+         list(a = format(coef(m)[1], digits = 2), 
+              b = format(coef(m)[2], digits = 2), 
+             r2 = format(summary(m)$r.squared, digits = 3)))
+    as.character(as.expression(eq));                 
+}
+
+# p1 <- p + geom_text(x = 25, y = 300, label = lm_eqn(df), parse = TRUE)
+
+library(devtools)
+# devtools::source_gist("524eade46135f6348140", filename = "ggplot_smooth_func.R")
+
+ggplot(df2, aes(x=ppr, y=realp)) + facet_wrap(~factor(fy)) +
+  geom_point(shape = 1) + 
+  # stat_smooth_func(geom="text",xpos = 2, ypos = 0.2,method="lm",hjust=0,parse=TRUE) +
+  # geom_smooth(method="lm",se=FALSE) +
+  geom_abline(aes(intercept=0, slope=1), alpha = 0.2) +
+  labs(x="Predicted penalty rate (%)", y="Actual penalty rate (%)") + 
+  theme_bw(base_size = 15) + 
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+  ggsave("~/Dropbox/Research/VI/output/ppr_realp.png", width =22.75, height=12.5, units="cm")
+
+  
+library(reshape2)
+df3 <- melt(df2, id.vars = c("provid", "fy"))    
+
+ggplot(df3, aes(value, linetype=variable)) + facet_wrap(~factor(fy)) +
+  geom_density() +
+  # geom_density(aes(ppr), colour="black", linetype="dashed") +
+  labs(x="Penalty rate (%)", y = "Density") +
+  theme_bw(base_size = 15) +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_linetype_discrete(name = "",
+                        breaks= c("realp", "ppr"),
+                        labels=c("Actual penalty rate", "Predicted penalty rate")) + 
+  theme(legend.position="bottom")
+  ggsave("~/Dropbox/Research/VI/output/ppr_realp_density.png", width =22.75, height=12.5, units="cm")
+  
+```
+
+
+
+# Descriptive result: the mean outcomes across hospitals over time for hospitals in top and bottom third of penalty pressure
+
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/trend_bytertile.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+table(df$gp)
+df <- subset(df, gp!="lnreqSNF_80pct")
+# & gp!="shref" & gp!="den_nsnf_used")
+
+df$gp <- factor(df$gp, levels=c("read30","read30_pac","shref","vi_snf","refhhi","shref_bytopSNF", "den_nsnf_used","nsnf_used", "comorbidsum","dischnum_pac"), labels = c("30-day readmission","30-day readmission after referred to SNF","Probability of referring to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF","# referred SNFs / # referrals","# referred SNFs", "Sum of share of discharges w/ comorbidities", "Number of SNF referrals"))
+
+df$year <- df$fy
+df$high <- factor(df$high, level= c(1,0), labels = c("Top tertile","Bottom tertile"))
+
+# just the readmission outcomes alone
+df2 <- subset(df, gp=="30-day readmission" | gp=="30-day readmission after referred to SNF")
+ggplot(df2) + facet_wrap(~gp, ncol=2) +
+  geom_point(aes(x=year, y = mean, shape=high, linetype=high), size=2) +
+  geom_line(aes(x=year, y = mean, shape=high, linetype=high), alpha = 0.5) +
+  scale_y_continuous(limits=c(.1, .35),
+                     breaks = seq(.1,0.35,0.05)) +
+  scale_x_continuous(breaks = seq(2009,2016,1)) +
+  theme_bw(base_size=13) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending June",
+       y="Mean") +
+  theme(legend.position="bottom", 
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  guides(linetype=guide_legend(title="Penalty pressure"),
+         shape=guide_legend(title="Penalty pressure"))
+ggsave("~/Dropbox/Research/VI/output/desc_readmit.pdf", width = 20, height=10, units="cm")
+
+# all outcomes in a single figure:  "Impact of 1% increase in the predicted penalty rate for 2013"
+df2 <- subset(df, gp!="30-day readmission" & gp!="30-day readmission after referred to SNF")
+ggplot(df2) + facet_wrap(~gp, ncol=2, scale="free") +
+  geom_point(aes(x=year, y = mean, shape=high, linetype=high), size=2) +
+  geom_line(aes(x=year, y = mean, shape=high, linetype=high), alpha = 0.2) +
+  # geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.2, .05),
+  #                    breaks = seq(-0.2,0.05,0.05),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = seq(2009,2016,1)) +
+  theme_bw(base_size=13) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending in June",
+       y="Mean") +
+  theme(legend.position="bottom", 
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  guides(linetype=guide_legend(title="Penalty pressure"),
+         shape=guide_legend(title="Penalty pressure"))
+ggsave("~/Dropbox/Research/VI/output/desc_alloutc.pdf", width = 25, height=20, units="cm")
+
+```
+
+
+
+# IV Results: Import coefficient estimates & 95% confidence intervals from the diff-in-diff estimates
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/IVcoef_DiD_static.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+table(df$gp)
+df <- subset(df, gp!="lnreqSNF_80pct")
+df$gp <- factor(df$gp, levels=c("read30","read30_pac","shref","vi_snf","refhhi","shref_bytopSNF","den_nsnf_used"), labels = c("A. 30-day readmission rate","B. 30-day readmission after referred to SNF","C. Share of discharges referred to SNF","D. Acquisition of SNF","E. SNF referral HHI","F. Referral share by top referred SNF","G. Ratio of # referred SNFs to # referrals"))
+# df$gp <- factor(df$gp, levels=c("read30","read30_pac","vi_snf","refhhi","shref_bytopSNF"), labels = c("30-day readmission","30-day readmission after referred to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF"))
+
+# all outcomes in a single figure:  "Impact of 1% increase in the predicted penalty rate for 2013"
+ggplot(df) + facet_wrap(~gp, ncol=2) +
+  geom_point(aes(x=year, y = estimate), size=2, shape=1) +
+  geom_line(aes(x=year, y = estimate), alpha = 0.2) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.2, .2),
+                     breaks = seq(-0.2,0.2,0.1),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = seq(2010,2016,1)) +
+  theme_bw(base_size=13) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending in June",
+       y="Change relative to 2009") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/IV_alloutc.pdf", width = 16, height=15, units="cm")
+
+# with reform
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/IVcoef_DiD_static_reform_2iv.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+table(df$gp)
+df <- subset(df, gp!="lnreqSNF_80pct")
+df$gp <- factor(df$gp, levels=c("read30","read30_pac","shref","vi_snf","refhhi","shref_bytopSNF","den_nsnf_used"), labels = c("A. 30-day readmission rate","B. 30-day readmission after referred to SNF","A. Share of discharges referred to SNF","B. Acquisition of SNF","C. SNF referral HHI","D. Referral share by top referred SNF","E. Ratio of # referred SNFs to # referrals"))
+# df$gp <- factor(df$gp, levels=c("read30","read30_pac","vi_snf","refhhi","shref_bytopSNF"), labels = c("30-day readmission","30-day readmission after referred to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF"))
+
+df2 <- subset(df, gp!="A. 30-day readmission rate" & gp!="B. 30-day readmission after referred to SNF")
+  
+# all outcomes in a single figure:  "Impact of 1% increase in the predicted penalty rate for 2013"
+ggplot(df2) + facet_wrap(~gp, ncol=2) +
+  geom_point(aes(x=year, y = estimate), size=1.5, shape=1) +
+  geom_line(aes(x=year, y = estimate), alpha = 0.2) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.15, .23),
+                     breaks = seq(-0.1,0.2,0.1)) +
+  scale_x_continuous(breaks = seq(2010,2016,2)) +
+  theme_bw(base_size=13) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending in June",
+       y="Change relative to 2009") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/IV_alloutc_reforms.pdf", width = 25, height=15, units="cm")
+
+
+```
+
+# OLS Results: Import coefficient estimates & 95% confidence intervals from the diff-in-diff estimates
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_static.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+table(df$gp)
+df <- subset(df, gp!="lnreqSNF_80pct")
+df$gp <- factor(df$gp, levels=c("read30","read30_pac","shref","vi_snf","refhhi","shref_bytopSNF","den_nsnf_used"), labels = c("30-day readmission","30-day readmission after referred to SNF","Share of discharges referred to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF","Ratio of # referred SNFs to # referrals"))
+
+# df <- subset(df, gp!="lnreqSNF_80pct" & gp!="den_nsnf_used" & gp!="shref")
+# df$gp <- factor(df$gp, levels=c("read30","read30_pac","vi_snf","refhhi","shref_bytopSNF"), labels = c("30-day readmission","30-day readmission after referred to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF"))
+
+# all outcomes in a single figure:  "Impact of 1% increase in the predicted penalty rate for 2013"
+ggplot(df) + facet_wrap(~gp, ncol=2) +
+  geom_point(aes(x=year, y = estimate), size=2, shape=1) +
+  geom_line(aes(x=year, y = estimate), alpha = 0.2) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.2, .05),
+  #                    breaks = seq(-0.2,0.05,0.05),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = seq(2010,2016,1)) +
+  theme_bw(base_size=13) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending in June",
+       y="Change relative to 2009") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/OLS_alloutc.pdf", width = 16, height=15, units="cm")
+
+# with reform participation variables
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_static_reform.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+table(df$gp)
+df <- subset(df, gp!="lnreqSNF_80pct")
+df$gp <- factor(df$gp, levels=c("read30","read30_pac","shref","vi_snf","refhhi","shref_bytopSNF","den_nsnf_used"), labels = c("A. 30-day readmission rate","B. 30-day readmission after referred to SNF","C. Share of discharges referred to SNF","D. Acquisition of SNF","E. SNF referral HHI","F. Referral share by top referred SNF","G. Ratio of # referred SNFs to # referrals"))
+
+# df <- subset(df, gp!="lnreqSNF_80pct" & gp!="den_nsnf_used" & gp!="shref")
+# df$gp <- factor(df$gp, levels=c("read30","read30_pac","vi_snf","refhhi","shref_bytopSNF"), labels = c("30-day readmission","30-day readmission after referred to SNF","Acquisition of SNF","SNF referral HHI","Referral share by top referred SNF"))
+
+# all outcomes in a single figure:  "Impact of 1% increase in the predicted penalty rate for 2013"
+ggplot(df) + facet_wrap(~gp, ncol=3) +
+  geom_point(aes(x=year, y = estimate), size=2, shape=1) +
+  geom_line(aes(x=year, y = estimate), alpha = 0.2) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.15, .23),
+                     breaks = seq(-0.1,0.2,0.1)) +
+  scale_x_continuous(breaks = seq(2010,2016,1)) +
+  theme_bw(base_size=12) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_vline(aes(xintercept=2011.5), colour="black", alpha=0.5, linetype="dashed") +
+  labs(x="Year ending in June",
+       y="Change relative to 2009") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/OLS_alloutc_reform.pdf", width = 25, height=15, units="cm")
+
+
+
+
+# readmission
+df2 <- subset(df, gp=="read30" | gp=="read30_pac")
+df2$gp <- factor(df2$gp, labels = c("All patients", "Patients referred to SNF"))
+
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate, shape=gp), position=pd, size=3) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95, linetype=gp), width=.1, position=pd, alpha=0.5) +
+  scale_y_continuous(limits=c(-.2, .05),
+                     breaks = seq(-0.2,0.05,0.05),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=13) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Impact of 1% increase in the predicted penalty rate for 2013 on \n30-day hospital readmission rate") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/readmit.pdf", width = 15, height=15, units="cm")
+
+# other integration outcome
+df2 <- subset(df, gp=="refhhi")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.05, .05),
+                     breaks = seq(-0.05,0.05,0.025),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="SNF referral concentration") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/refhhi.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="lnreqSNF_80pct")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.1, .15),
+                     breaks = seq(-0.1,0.15,0.05),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Log Number of SNFs required to account for 80% of SNF referrals") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/lnreqSNF_80pct.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="shref_bytopSNF")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.05, .05),
+                     breaks = seq(-0.05,0.05,0.025),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Share of referrals by the most referred SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/shref_bytopSNF.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="den_nsnf_used")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.02, .06),
+  #                    breaks = seq(-.02, .06,0.02),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Number of SNFs referred to per referral") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/den_nsnf_used.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="vi_snf")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.04, 0.09),
+                     breaks = seq(-.04, .08,0.02),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Probability of acquiring a SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/vi_snf.pdf", width = 15, height=10, units="cm")
+```
+
+
+# Plot the coefficients on interaction between dynamic penalty pressure and year dummies
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_dynamic.csv")
+
+# The errorbars overlapped, so use position_dodge to move them horizontally
+pd <- position_dodge(0.3) # move them .05 to the left and right
+
+# readmission
+df2 <- subset(df, gp=="read30" | gp=="read30_pac")
+df2$gp <- factor(df2$gp, labels = c("All patients", "Patients referred to SNF"))
+
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate, shape=gp), position=pd, size=3) +
+  geom_line(aes(x=year, y = estimate, shape=gp), position=pd, alpha = 0.4) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95, linetype=gp), width=.1, position=pd, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.2, .05),
+  #                    breaks = seq(-0.2,0.05,0.05),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="", 
+       subtitle="30-day hospital readmission rate") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/readmit_dpp.pdf", width = 15, height=10, units="cm")
+
+# probability of referring to SNF
+df2 <- subset(df, gp=="shref_ddest")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.05, .05),
+  #                    breaks = seq(-0.05,0.05,0.025),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Probability of referring to SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/shref_ddest_dpp.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="shref")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.05, .05),
+  #                    breaks = seq(-0.05,0.05,0.025),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Probability of referring to SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/shref_dpp.pdf", width = 15, height=10, units="cm")
+
+
+# other integration outcome
+df2 <- subset(df, gp=="refhhi")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.05, .05),
+  #                    breaks = seq(-0.05,0.05,0.025),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  # geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="SNF referral concentration") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/refhhi_dpp.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="lnreqSNF_80pct")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.1, .15),
+  #                    breaks = seq(-0.1,0.15,0.05),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Log Number of SNFs required to serve 80% of SNF referrals") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/lnreqSNF_80pct_dpp.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="shref_bytopSNF")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.05, .05),
+                     breaks = seq(-0.05,0.05,0.025),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  # geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Share of referrals by the most referred SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/shref_bytopSNF_dpp.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="den_nsnf_used")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  # scale_y_continuous(limits=c(-.02, .06),
+  #                    breaks = seq(-.02, .06,0.02),
+  #                    minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  # geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Number of SNFs referred to per referral") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/den_nsnf_used_dpp.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, gp=="vi_snf")
+ggplot(df2) +
+  geom_point(aes(x=year, y = estimate), size=3) +
+  geom_line(aes(x=year, y = estimate)) +
+  geom_errorbar(aes(x=year, ymin=min95, ymax=max95), width=.1, alpha=0.5) +
+  scale_y_continuous(limits=c(-.04, 0.04),
+                     breaks = seq(-.04, .08,0.02),
+                     minor_breaks = NULL) +
+  scale_x_continuous(breaks = c(2010:2016),
+                     minor_breaks = NULL) +
+  theme_bw(base_size=14) +
+  # geom_vline(aes(xintercept=2010.5), colour="black", alpha=0.5, linetype="dashed") +
+  geom_hline(aes(yintercept=0), colour="black", alpha=0.5) +
+  labs(x="Year ending in June",
+       y="",
+       subtitle="Probability of acquiring a SNF") +
+  theme(panel.grid.major.x = element_blank())
+ggsave("~/Dropbox/Research/VI/output/vi_snf_dpp.pdf", width = 15, height=10, units="cm")
+```
+
+
+# pure trend in outcomes over time
+```{r}
+df <- read.csv("~/Dropbox/Research/VI/output/trend.csv")
+
+# provid fy read30 read30_pac refhhi shref_bytopSNF lnreqSNF_80pct gini den_nsnf_used
+
+df2 <- summarySE(df, measurevar=c("shref"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=shref)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=shref-ci, ymax=shref+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Probability of referring to SNF") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.1,0.3),
+                     breaks = seq(0.1,0.3,0.1)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_shref.pdf", width = 15, height=10, units="cm")
+
+
+df2 <- summarySE(df, measurevar=c("refhhi"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=refhhi)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=refhhi-ci, ymax=refhhi+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="SNF referral concentration") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.18,0.22),
+                     breaks = seq(0.18,0.22,0.01)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_refhhi.pdf", width = 15, height=10, units="cm")
+
+df2 <- summarySE(df, measurevar=c("shref"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=shref)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=shref-ci, ymax=shref+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Probability of referring to SNF") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.1,0.3),
+                     breaks = seq(0.1,0.3,0.1)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_shref.pdf", width = 15, height=10, units="cm")
+
+df2 <- summarySE(df, measurevar=c("den_nsnf_used"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=den_nsnf_used)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=den_nsnf_used-ci, ymax=den_nsnf_used+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Number of SNF referred to per referral") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.1,0.3),
+                     breaks = seq(0.1,0.3,0.1)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_den_nsnf_used.pdf", width = 15, height=10, units="cm")
+
+df2 <- summarySE(df, measurevar=c("shref_bytopSNF"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=shref_bytopSNF)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=shref_bytopSNF-ci, ymax=shref_bytopSNF+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Share of SNF referrals by the most referred SNF") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.2,0.4),
+                     breaks = seq(0.2,0.4,0.1)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_shref_bytopSNF.pdf", width = 15, height=10, units="cm")
+
+
+df2 <- summarySE(df, measurevar=c("vi_snf"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=vi_snf)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=vi_snf-ci, ymax=vi_snf+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Probability of having a hospital-based SNF") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.1,0.3),
+                     breaks = seq(0.1,0.3,0.1)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_vi_snf.pdf", width = 15, height=10, units="cm")
+
+df2 <- subset(df, vi_snf2008==0)
+df2 <- summarySE(df2, measurevar=c("vi_snf"), groupvars=c("fy"))
+ggplot(df2, aes(x=fy, y=vi_snf)) +
+  geom_point() +
+  geom_line() + 
+  geom_errorbar(aes(ymin=vi_snf-ci, ymax=vi_snf+ci), width=.1) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Probability of acquiring a SNF given not having one in 2008") +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0,0.04),
+                     breaks = seq(0,0.04,0.02)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_vi_snf_adopt.pdf", width = 15, height=10, units="cm")
+
+
+df2 <- summarySE(df, measurevar=c("read30"), groupvars=c("fy"))
+df2$gp <- "read30"
+df3 <- summarySE(df, measurevar=c("read30_pac"), groupvars=c("fy"))
+df3$gp <- "read30_pac"
+colnames(df2)[3] <- "value"
+colnames(df3)[3] <- "value"
+df4 <- rbind(df2, df3)
+
+df4$gp <- factor(df4$gp, labels = c("All patients", "Patients referred to SNF"))
+
+ggplot(df4) +
+  geom_point(aes(x=fy, y=value, shape=gp), size=3) +
+  geom_line(aes(x=fy, y=value, linetype=gp)) +
+  geom_errorbar(aes(x=fy, ymin=value-ci, ymax=value+ci, group=gp), width=.1, alpha=0.5) +
+  theme_bw(base_size=14) +
+  labs(x="Year ending in June", y="",
+       subtitle="Probability of referring to SNF") +
+  theme(legend.position="bottom", 
+        legend.title=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank()) +
+  scale_y_continuous(limits = c(0.1,0.3),
+                     breaks = seq(0.1,0.3,0.05)) +
+  scale_x_continuous(limits = c(2008.5,2016.5),
+                     breaks= seq(2009,2016,1)) 
+ggsave("~/Dropbox/Research/VI/output/trend_read.pdf", width = 15, height=10, units="cm")
+
+
+```
+
+
 # IV trend
 ```{r}
 df <- read.csv("~/Dropbox/Research/VI/output/iv.csv")
@@ -818,57 +1574,6 @@ ggsave("~/Dropbox/Research/VI/output/d_16_15.png", width = 15, height=10, units=
 
 
 ```
-
-# how good is our penalty pressure?
-```{r}
-# scatterplot of predicted penalty rate & actual penalty rate in t+2 (add correlation coefficient)
-
-df2 <- subset(df, fy >=2011)
-
-lm_eqn <- function(df,y,x){
-    m <- lm(y ~ x, df);
-    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
-         list(a = format(coef(m)[1], digits = 2), 
-              b = format(coef(m)[2], digits = 2), 
-             r2 = format(summary(m)$r.squared, digits = 3)))
-    as.character(as.expression(eq));                 
-}
-
-# p1 <- p + geom_text(x = 25, y = 300, label = lm_eqn(df), parse = TRUE)
-
-library(devtools)
-# devtools::source_gist("524eade46135f6348140", filename = "ggplot_smooth_func.R")
-
-ggplot(df2, aes(x=ppr, y=realp)) + facet_wrap(~factor(fy)) +
-  geom_point(shape = 1) + 
-  # stat_smooth_func(geom="text",xpos = 2, ypos = 0.2,method="lm",hjust=0,parse=TRUE) +
-  # geom_smooth(method="lm",se=FALSE) +
-  geom_abline(aes(intercept=0, slope=1), alpha = 0.2) +
-  labs(x="Predicted penalty rate (%)", y="Actual penalty rate (%)") + 
-  theme_bw(base_size = 15) + 
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank())
-  ggsave("~/Dropbox/Research/VI/output/ppr_realp.png", width =22.75, height=12.5, units="cm")
-
-  
-library(reshape2)
-df3 <- melt(df2, id.vars = c("provid", "fy"))    
-
-ggplot(df3, aes(value, linetype=variable)) + facet_wrap(~factor(fy)) +
-  geom_density() +
-  # geom_density(aes(ppr), colour="black", linetype="dashed") +
-  labs(x="Penalty rate (%)", y = "Density") +
-  theme_bw(base_size = 15) +
-  theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank()) +
-  scale_linetype_discrete(name = "",
-                        breaks= c("realp", "ppr"),
-                        labels=c("Actual penalty rate", "Predicted penalty rate")) + 
-  theme(legend.position="bottom")
-  ggsave("~/Dropbox/Research/VI/output/ppr_realp_density.png", width =22.75, height=12.5, units="cm")
-  
-```
-
 
 # difference between time-constant and time-varying penalty pressure
 
