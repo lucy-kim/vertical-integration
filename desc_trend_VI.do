@@ -1,4 +1,4 @@
-*descriptive analysis of the trend of vertical integration over time
+*descriptive analysis of the trend in vertical integration over time
 
 set matsize 11000
 loc gph /ifs/home/kimk13/VI/gph
