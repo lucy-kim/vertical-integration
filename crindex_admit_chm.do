@@ -2,12 +2,15 @@
 
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare
+cd `dta'/Medicare/corrected-hosplevel/results_index_snf_counts_May_25
 
-loc f index_freq.csv
+loc f "1.index_freq_May25.csv"
 insheet using `f', comma names clear
 tempfile index
 save `index'
+
+*sort provid dischyear dischmth cond ddest
+*list  provid dischyear dischmth cond ddest count dischnum white black read* ses_score in 1/10
 
 *aggregate across destinations (ddest=06 for HHC, 03 for SNF)
 use `index', clear
@@ -17,7 +20,7 @@ gen ym = ym(dischyear, dischmth)
 sum ym
 loc fm = `r(min)'
 loc lm = `r(max)'
-*576 - 671
+*576 - 677
 format ym %tm
 
 tempfile tmp
@@ -62,4 +65,13 @@ assert fy!=.
 drop _m date
 
 compress
-save index_admit_chm, replace
+save `dta'/Medicare/index_admit_chm, replace
+
+*-------------------
+*aggregate up to the year level
+use `dta'/Medicare/index_admit_chm, clear
+
+collapse (sum) dischnum-read90 (mean) ses_score, by(cond provid fy)
+
+compress
+save `dta'/Medicare/index_admit_chy, replace

@@ -7,36 +7,30 @@ cd `dta'/Medicare
 
 loc nn 1
 loc n2 =`nn'*1
-loc k 9
-loc k2 10
+loc k 11
 
-
-loc yv1 read30
-loc yv2 read30_pac
-loc yv3 shref
-loc yv4 vi_snf
-loc yv5 refhhi
-loc yv6 shref_bytopSNF
-loc yv7 lnreqSNF_80pct
-loc yv8 den_nsnf_used
-
-preserve
 use ivpenalty_VI_agg3c, clear
-lab var read30 "30-day readmission rate"
-lab var read30_pac "Readmission rate after referred to SNF"
+
+loc ii = 0
+foreach v of varlist read30_pac read30_other shref comorbidsum vi_snf refhhi qual_read {
+  loc ii = `ii' + 1
+  loc yv`ii' `v'
+}
+loc k2 =`ii' + 2
+loc vc =`ii'
+
+lab var read30_other "30-day readmission rate among all other"
+lab var read30_pac "Readmission rate among SNF referred"
 lab var shref "Probability of referring to SNF"
 lab var vi_snf "Probability of acquiring SNF"
 lab var refhhi "SNF referral HHI"
-lab var shref_bytopSNF "Share of referrals by top referred SNF"
-lab var den_nsnf_used "Num. SNFs referred / num. referrals"
-lab var lnreqSNF_80pct "Log Num. SNFs to take 80% of referrals"
+lab var qual_read "Referral share to low-readmission SNFs"
 
-forval x=1/8 {
+forval x=1/`vc' {
   di "`yv`x'''"
   loc l`x' "`: var label `yv`x'''"
   di "`l`x''"
 }
-restore
 
 *reshape OLS & IV coefficients & 95% CI to report as tables
 

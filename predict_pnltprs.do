@@ -108,6 +108,11 @@ lab var ppr "Predicted penalty rate as of 2011"
 
 merge 1:1 provid using `pnltr', keep(1 3) nogen
 
+drop pnltrate_t2
+foreach v of varlist ppr pnltr201?   {
+  replace `v' = `v'*100
+}
+
 compress
 save predict_pnltprs, replace
 

@@ -1,10 +1,10 @@
 *Examine whether penalty pressure for all 3 initial conditions changes referral concentration
 *regression analysis of the penalty pressure on vertical integration
 
-*packages for local linear regression
+/* *packages for local linear regression
 net install ivqte, from("https://sites.google.com/site/blaisemelly/")
 net install st0026_2, from(http://www.stata-journal.com/software/sj5-3)
-ssc install moremata
+ssc install moremata */
 
 loc gph /ifs/home/kimk13/VI/output
 loc reg /ifs/home/kimk13/VI/output
@@ -14,57 +14,64 @@ loc int 2011
 cd `dta'/Medicare
 
 *-----------------------
-
 *first construct data containing interaction terms of static and dynamic penalty pressure with time variables separately
 
-use anpenalty_VI_agg3c, clear
+use hosp_fy_VI_agg3c, clear
 
-loc lshref "Share of discharges referred to SNF"
-loc lrefhhi "SNF referral concentration"
-loc lrefhhi_samehrr "Referral concentration among SNFs in the same HRR"
-loc lshsnf_used "Share of SNFs in the market used"
-loc lratio_nsnf "Ratio of # SNFs used in current year to previous year"
-loc lshref_usedbefore "Share of SNF referrals to previouly used SNFs"
-loc lshsnf_used_ag "Share of previously used SNFs used again"
-loc lrefhhi_prevSNFs "Referral HHI among SNFs used in the previous year"
-loc llnsnf_used "Ln Number of SNFs used"
-loc lrefhhi_gr "Growth in referral concentration"
-loc lrefhhi_same_gr "Growth in referral concentration in same-market HRR"
-loc lnnsnf_samehrr  "Log Number of same-HRR SNFs a hospital referred to"
-loc lshref_samehrr "Share of referrals to the same-HRR SNFs"
-loc lvi_snf "Formally own SNF"
-lab var vi_snf "Formally own SNF"
-loc lread30 "30-day readmission rate"
-loc lread30_pac "30-day readmission rate among SNF referred patients"
-loc lden_nsnf_used "Number of SNFs being referred to per case referred"
+*sample restriction
+drop if fy==2008
 
-lab var den_nsnf_used "Number of SNFs referred to per referral"
-lab var refhhi "SNF referral concentration"
-lab var gini "Gini coefficient of SNF referrals"
-lab var refhhi_chng08 "Percent change from 2008 referral concentration"
+*drop small hospitals whose min # bed < 30
+bys provid: egen x = min(beds)
+tab fy if x >= 30
+drop if x < 30
+drop x
+tab fy
+*1722 hospitals
 
-loc yv vi_snf refhhi den_nsnf_used lnreqSNF_80pct shref_bytopSNF gini
+*restrict to hospital-conditions whose mean # discharges over 2009-2010 is at least 50
+capture drop x
+bys provid: egen x = mean(dischnum) if fy < 2011
+bys provid: egen mdischnum = max(x)
+tab fy if mdischnum > 50
+keep if mdischnum >= 50
+drop x mdischnum
+
+bys fy: sum dischnum_pac
+
+
+*tag hospitals if the # referrals = 0 or 1 at any point in time - don't exclude them in the analysis of concentration measures
+capture drop x
+capture drop bad
+gen x = dischnum_pac < 2
+bys provid: egen bad = max(x)
+*tab fy if bad==1
+drop x
+
+*tag hospitals if the mean # referrals < 15 in the pre-HRRP
+capture drop mdischnum_pac
+bys provid: egen x = mean(dischnum_pac) if fy < 2011
+bys provid: egen mdischnum_pac = max(x)
+*sum dischnum* refhhi if mdischnum_pac >= 10
+*tab fy if mdischnum_pac < 10
+replace bad = 1 if mdischnum_pac < 15
+*tab fy bad
+drop x mdischnum_pac
+
+
+*------------------------
+*create treatment X Post interaction terms
+
+loc yv vi_snf refhhi refdensity lnreqSNF_80pct shref_bytopSNF shref read30*
 foreach v of varlist `yv' {
   loc l`v' "`: var label `v''"
-  des `v'
 }
 
-corr reqSNF_80pct refhhi
-corr shref_bytopSNF refhhi
-corr shref_bytopSNF gini
-
-*pac_hhi_hrr lnnsnf_hrr_fy
-
-*refhhi refhhi_samehrr lnnsnf_used refhhi_prevSNFs shref_usedbefore shsnf_used_ag shsnf_used ratio_nsnf shref
-
-*in the previous code,
-
+xi i.fy
 
 loc int 2011
-gen spp = ppr`int'
+gen spp = ppr
 loc pp spp
-sum `pp' if fy==`int', de
-loc pp_sd: di %9.3f `r(sd)'
 
 tab fy, summarize(`pp')
 
@@ -92,163 +99,65 @@ forval t = 2010/2016 {
 
 table fy, contents(mean ppr sd ppr p75 ppr p25 ppr max ppr)
 
-*create a z-score of penalty pressure
-gen dpp = ppr
-loc pp dpp
-
-gen dppXpost`int' = `pp'*post`int'
-lab var dppXpost`int' "Dynamic penalty pressure X Post `int'"
-
-gen dppXpost13 = `pp'*post13
-lab var dppXpost13 "Dynamic penalty pressure X Post 2013"
-
-gen dppXpost13trend = `pp'*post13trend
-lab var dppXpost13trend "Dynamic penalty pressure X Post-2013 trend"
-
-gen dppXpost11trend = `pp'*post11trend
-lab var dppXpost11trend "Dynamic penalty pressure X Post-2011 trend"
-
-forval t = 2011/2016 {
-  gen dppX`t' = `pp'*_Ify_`t'
-  lab var dppX`t' "Dynamic penalty pressure X `t'"
-}
-
-capture drop x
-foreach v of varlist spp {
-  loc n 75
-  capture drop x`n'
-  bys fy: egen x`n' = pctile(`v'), p(`n')
-  capture drop p`n'_`v'
-  gen p`n'_`v' = `v' >= x`n'
-
-  loc n 25
-  capture drop x`n'
-  bys fy: egen x`n' = pctile(`v'), p(`n')
-  capture drop p`n'_`v'
-  gen p`n'_`v' = `v' >= x`n' & `v' < x75
-
-  drop x25 x75
-}
-foreach v of varlist spp {
-  foreach n of numlist 25 75 {
-    capture drop p`n'_`v'Xpost`int'
-    gen p`n'_`v'Xpost`int' = p`n'_`v' * post`int'
-    forval y = 2010/2016 {
-      gen p`n'_`v'X`y' = p`n'_`v' * _Ify_`y'
-    }
-  }
-}
-
-keep if cond=="Initial"
-capture drop mdischnum_pac x
-bys provid: egen x = mean(dischnum_pac) if fy < 2011
-bys provid: egen mdischnum_pac = max(x)
-drop if mdischnum_pac < 30
-tab fy
-
 tsset provid fy
 
 tempfile an
 save `an'
 
+*------------------------
+*contruct IVs
+
 *to match the sample used for IV analysis, exclude hospitals with missing data in Medicaid ratio for 2000-2008 and % black in 2008
-use hosp_fy_VI, clear
+use hosp_fy_VI_agg3c, clear
 keep if fy ==2008
-collapse (sum) black dischnum (mean) ses_score, by(provid uncomp1 dissh)
-gen rblack = black / dischnum
-keep provid ses_score rblack dissh uncomp1
+collapse (mean) read* ses_score black SSIratio, by(provid hrrnum)
+keep provid ses_score black SSIratio hrrnum read*
 
-*merge with cost report data for SSI ratio, Medicaid ratio
-preserve
-use `dta'/costreport/hosp_chars_cr, clear
-
-gsort provid fy
-foreach v of varlist SSIratio Medicaid_ratio {
-  bys provid: replace `v' = `v'[_n-1] if `v'>=.
-}
-gsort provid -fy
-foreach v of varlist SSIratio Medicaid_ratio {
-  bys provid: replace `v' = `v'[_n-1] if `v'>=.
-}
-keep if fy == 2008
-
-*keep provid fy SSIratio Medicaid_ratio
-*reshape wide SSIratio Medicaid_ratio, i(provid) j(fy)
-collapse (mean) SSIratio Medicaid_ratio, by(provid)
-
-tempfile cr
-save `cr'
-restore
-
-merge 1:1 provid using `cr', keep(3) nogen
-
-merge 1:m provid using `an', keep(3) nogen
-
-drop if Medicaid_ratio==. | rblack==.
+*if > 1, recode ratio as share
+replace SSIratio = SSIratio/100 if SSIratio > 1
 
 foreach n of numlist 30 60 90 {
-  areg read`n' rblack Medicaid_ratio, absorb(hrrnum) cluster(hrrnum)
-  predict read`n'_poor, xb
+  areg read`n' black, absorb(hrrnum) cluster(hrrnum)
+  predict read`n'_black, xb
 }
 
-foreach v of varlist read30_poor read60_poor read90_poor ses_score rblack SSIratio Medicaid_ratio {
-  forval int = 2011/2011 {
-    capture drop `v'Xpost`int'
-    gen `v'Xpost`int' = `v'*post`int'
-    capture drop `v'Xpost11trend
-    gen `v'Xpost11trend = `v'*post11trend
-  }
+keep provid read*_black ses_score black SSIratio
+
+foreach v of varlist read*_black ses_score black SSIratio {
+  rename `v' `v'08
+}
+
+tempfile iv
+save `iv'
+*--------------------------
+use `an', clear
+merge m:1 provid using `iv', keep(1 3) nogen
+
+loc int 2011
+foreach v of varlist read*_black08 ses_score08 black08 SSIratio08 {
+  capture drop `v'Xpost`int'
+  gen `v'Xpost`int' = `v'*post`int'
+  capture drop `v'Xpost11trend
+  gen `v'Xpost11trend = `v'*post11trend
   forval t=2010/2016 {
     capture drop `v'X`t'
     gen `v'X`t' = `v'*_Ify_`t'
   }
 }
 
-forval int = 2011/2012 {
-  lab var ses_scoreXpost`int' "Mean SES score X Post `int'"
-  lab var rblackXpost`int' "Share of black patients X Post `int'"
-  lab var SSIratioXpost`int' "SSI recipient patient days ratio X Post `int'"
-  lab var Medicaid_ratioXpost`int' "Medicaid patient days ratio X Post `int'"
-}
+lab var ses_score08Xpost`int' "Mean SES score X Post `int'"
+lab var black08Xpost`int' "Share of black patients X Post `int'"
+lab var SSIratio08Xpost`int' "SSI recipient patient days ratio X Post `int'"
+lab var SSI_ratio08Xpost`int' "SSI recipient patient days ratio X Post `int'"
+
 forval t=2010/2016 {
-  lab var ses_scoreX`t' "Mean SES score X `t'"
-  lab var rblackX`t' "Share of black patients X `t'"
-  lab var SSIratioX`t' "SSI recipient patient days ratio X `t'"
-  lab var Medicaid_ratioX`t' "Medicaid patient days ratio X `t'"
-  lab var read30_poorX`t' "Race and income-based 30-day readmission rate X `t'"
-  lab var read60_poorX`t' "Race and income-based 31-60 day readmission rate X `t'"
-  lab var read90_poorX`t' "Race and income-based 61-90 day readmission rate X `t'"
+  lab var ses_score08X`t' "Mean SES score X `t'"
+  lab var black08X`t' "Share of black patients X `t'"
+  lab var SSIratio08X`t' "SSI recipient patient days ratio X `t'"
+  lab var read30_black08X`t' "Race and income-based 30-day readmission rate X `t'"
+  lab var read60_black08X`t' "Race and income-based 31-60 day readmission rate X `t'"
+  lab var read90_black08X`t' "Race and income-based 61-90 day readmission rate X `t'"
 }
-
-*get # discharges to SNF using the discharge destination code
-preserve
-use index_admit_chm_ddest, clear
-keep if ddest==3
-drop if cond=="HK"
-collapse (sum) dischnum_pac_ddest = count, by(provid fy)
-tempfile dischnum_pac_ddest
-save `dischnum_pac_ddest'
-restore
-
-merge 1:1 provid fy using `dischnum_pac_ddest', keep(1 3) nogen
-
-*re-create 2 vars involving # discharges to SNF: prob of referral, # SNFs/#referrals
-replace shref = dischnum_pac_ddest/dischnum
-replace den_nsnf_used = nsnf_used / dischnum_pac_ddest
-
-*drop 2 hospitals if dischnum_pac_ddest==0
-bys provid: egen zero = max(dischnum_pac_ddest==0)
-drop if zero==1
-drop zero
-
-*drop hospitals that have # SNFs / # referrals greater than 1
-tab provid if den_nsnf_used > 1
-*list provid fy den_nsnf_used nsnf_used dischnum dischnum_pac* if provid==50526 | provid==450083
-bys provid: egen mm = max(den_nsnf_used)
-drop if mm > 1
-drop mm
-
-sum den_nsnf_used if fy==2016, de
 
 capture drop x
 sum vi_snf_l if fy==2009
@@ -256,30 +165,106 @@ gen x = vi_snf_l if fy==2009
 bys provid: egen vi_snf2008 = max(x)
 drop x
 
-*drop hospitals with missing SSIratio
-drop if SSIratio==.
+sum `pp' if fy==`int', de
+loc pp_sd: di %9.3f `r(sd)'
+
+*create logged variables
+gen lnnsnf_mkt_samehrr = ln(nsnf_samehrr)
+
+xi i.fy i.size
+
+capture drop defcnt qual_def* qual_read
+merge 1:1 provid fy using qualindex, keep(1 3) nogen
+lab var qual_def "Referral share to low-deficiency SNFs"
+lab var qual_def_old "Referral share to low-deficiency existing SNFs"
+lab var defcnt "Mean deficiency counts"
+lab var qual_read "Referral share to low-readmission SNF"
+
+*also get the sum of patient comorbidities among SNF referred patients
+egen comorbidsum = rowtotal(metacancer_ct_snf-hipfracture_ct_snf)
+replace comorbidsum = comorbidsum/ dischnum_pac
+sum comorbidsum
+lab var comorbidsum "Sum of comorbidity shares among SNF referred patients"
+
+tempfile tmp
+save `tmp'
+
+*get condition-specific probability of referrals
+use SNFreferral_tchpm.dta, clear
+drop if cond=="HK"
+collapse (sum) dischnum_pac, by(cond provid fy)
+tempfile cond1
+save `cond1'
+
+use index_admit_chm, clear
+drop if cond=="HK"
+collapse (sum) dischnum, by(cond provid fy)
+merge 1:1 provid fy cond using `cond1', keep(1 3)
+replace dischnum_pac = 0 if _m==1
+drop _m
+
+gen shref = dischnum_pac/dischnum
+assert dischnum==0 if shref==.
+assert shref >= 0 & shref <=1 if shref!=.
+
+reshape wide shref dischnum*, i(provid fy) j(cond) st
+tempfile cond2
+save `cond2'
+
+use `tmp', clear
+merge 1:1 provid fy using `cond2', keep(1 3) nogen
+
+*drop hospitals if there are missing values in any of the covariates / outcomes
+
+*for 2 hospital-year pairs, index_dual is missing - code it as zero
+replace index_dual_rate = 0 if index_dual_rate==. & index_dual==.
+assert index_dual_rate!=.
+
+assert dischnum_pac==0 if snf_dual_rate==.
+sum snf_dual dischnum_pac if snf_dual_rate==.
 
 
-*restrict to hospital-conditions whose mean # discharges over 2009-2010 is at least 25
-capture drop x
-bys provid: egen x = mean(dischnum) if fy < 2011
-bys provid: egen mdischnum = max(x)
-tab fy if mdischnum > 30
+*generate readmission rate, # comorbidity counts, # dual eligibles, # blacks, # whites among all other non-SNF referred patients
+gen other_denom = dischnum - dischnum_pac
+foreach v of varlist read30 black white metacancer_ct-hipfracture_ct {
+  gen `v'_lvl = `v'*dischnum
+}
+foreach v of varlist read30_pac black_pac white_pac metacancer_ct_snf-hipfracture_ct_snf {
+  gen `v'_lvl = `v'*dischnum_pac
+}
 
-keep if mdischnum >= 30
-drop x mdischnum
+foreach v of varlist read30 black white {
+  gen `v'_other = `v'_lvl - `v'_pac_lvl
+}
+foreach v of varlist metacancer_ct-hipfracture_ct {
+  gen `v'_other = `v'_lvl - `v'_snf_lvl
+}
+replace snf_dual = 0 if snf_dual==.
+replace index_dual = 0 if index_dual==.
+gen dual_other = index_dual - snf_dual
+assert dual_other!=.
 
-*drop small hospitals whose min # bed < 30
-bys provid: egen x = min(beds)
-tab fy if x >= 30
-drop if x < 30
-drop x
-tab fy
-*1722 hospitals
+foreach v of varlist *_other {
+  replace `v' = `v'/ other_denom
+  assert `v' >= 0 & `v' <=1 if `v'!=.
+}
 
+sum qual_read
+replace qual_read = qual_read -`r(min)'
+assert qual_read >=0
+
+* aweight by # discharges in the first year
+sort provid fy
+bys provid: gen dischnum1 = dischnum if _n==1
+bys provid: replace dischnum1 = dischnum1[_n-1] if dischnum1>=.
+
+/* bys provid: gen beds1 = beds if _n==1
+bys provid: replace beds1 = beds1[_n-1] if beds1>=.
+loc wgt [aw=beds1] */
 
 compress
 save ivpenalty_VI_agg3c, replace
+
 
 *--------------------------
 * data for Meng (as of 5/17/18)
@@ -300,30 +285,31 @@ loc int 2011
 loc pnltprs1 sppXpost`int'
 loc pnltprs2 sppXpost`int' sppX2010 sppXpost11trend
 loc pnltprs3 sppX20*
-*loc pnltprs3 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13
-*loc pnltprs4 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13trend
-*loc pnltprs5 pnltprsX2010 pnltprsX2011 pnltprsX2012 pnltprsXpost13 pnltprsXpost13trend
 
-/* loc pnltprs1 p75_sppXpost`int' p25_sppXpost`int' p75_sppX2010 p25_sppX2010 */
-
-loc comorbid metacancer_ct-hipfracture_ct
+loc comorbid_other black_other white_other dual_other metacancer_ct_other-hipfracture_ct_other
+loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
+*for now use hosp-comorbidities
+loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
+*loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
 loc reform EHRstage1 EHRstage2 vbp_adjf HACstatus
-loc sp _Ify_* own_* urban teaching i.size  lnnsnf_mkt_samehrr black white `comorbid' `reform'
+loc sp_hosp _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_hosp'
+loc sp_other _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_other'
+loc sp_snf _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_snf'
+*loc sp _Ify_* own_* urban teaching _Isize* lnnsnf_mkt_samehrr black white `comorbid' `reform'
 *loc sp2 `sp1' own_* urban teaching i.gp_beds lnnsnf_mkt_samehrr
 *loc sp3 `sp2' vi_snf_l
 *loc sp4 `sp3' ses_score black white `comorbid'
 
-
 use ivpenalty_VI_agg3c, clear
 
-tsset provid fy
+loc wgt [aw=dischnum1]
+
 
 loc file1 ols_spp_reform_pv
 loc file2 ols_spp_reform_ci
 forval sn = 1/2 {
   capture erase `reg'/`file`sn''.xls
   capture erase `reg'/`file`sn''.txt
-  capture erase `reg'/`file`sn''.tex
 }
 loc stat1 pv
 loc stat2 ci
@@ -331,32 +317,143 @@ loc stat2 ci
 lab var read30 "30-day readmission rate"
 lab var read30_pac "30-day readmission rate after referred to SNFs"
 
+loc n 1
+
 forval sn = 1/2 {
-  foreach yv of varlist read30 read30_pac shref vi_snf  refhhi shref_bytopSNF lnreqSNF_80pct den_nsnf_used {
+  *for different outcomes, use hospital- vs SNF-level specification
+  loc yv read30_pac
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
 
-    loc out "outreg2 using `reg'/`file`sn''.xls, append label ctitle(`l`yv'') `stat`sn''"
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
-    forval n = 1/1 {
-      *loc pnltprs pnltprsXpost`int'
-      *loc pnltprs p75_pnltprsXpost`int' p25_75_pnltprsXpost`int'
-      *[aw=nsnf_mkt_samehrr]
+  *--------------------
+  loc yv read30_other
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_other' vi_snf_l `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
 
-      if "`yv'"=="vi_snf" {
-        xtreg `yv' `pnltprs`n'' `sp' if vi_snf2008==0, cluster(provid) fe
-      }
-      else {
-        xtreg `yv' `pnltprs`n'' `sp' vi_snf_l , cluster(provid) fe
-        *areg `yv' `pnltprs`n'' `sp`sn'' , cluster(provid) absorb(provid)
-      }
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
-      *mean dep var
-      sum `yv' if e(sample)
-      loc mdv: display %9.3f `r(mean)'
+  *--------------------
+  foreach yv of varlist shref {
+    loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+    xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
-    }
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  }
+
+  *--------------------
+  loc yv comorbidsum
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+
+  *--------------------
+  loc yv vi_snf
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' if vi_snf2008==0 & bad==0 `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+
+  *--------------------
+  *
+  foreach yv of varlist refhhi qual_read {
+    loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+    xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 `wgt', cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
   }
 }
+
+*-------------
+*for all the outcomes, when using the specification with interaction with year dummies, let's just plot the coefficients
+use ivpenalty_VI_agg3c, clear
+
+loc pnltprs2 sppX20*
+
+loc yv read30_pac
+xtreg `yv' `pnltprs2' `sp_snf' vi_snf_l, cluster(provid) fe
+tempfile `yv'
+parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``yv'', replace)
+
+loc yv read30_other
+xtreg `yv' `pnltprs2' `sp_other' vi_snf_l `wgt', cluster(provid) fe
+tempfile `yv'
+parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``yv'', replace)
+
+
+sum spp, de
+loc p25 = `r(p25)'
+loc p75 = `r(p75)'
+loc delta = `p75' - `p25'
+
+use `read30_pac', clear
+gen gp = "read30_pac"
+foreach yv in "read30_other"  {
+  append using ``yv''
+  replace gp = "`yv'" if gp==""
+}
+assert gp!=""
+keep if regexm(parm, "spp")
+gen year = substr(parm, -4,4)
+tab gp
+drop dof t
+
+foreach v of varlist estimate min95 max95 {
+  replace `v' = `v' * `delta'
+}
+
+compress
+outsheet using `reg'/coef_DiD_static_reform.csv, replace names comma
+
+*--------------------------
+* interpret results
+
+*25th & 75th percentile of penalty pressure
+sum spp, de
+loc p75 = `r(p75)'
+loc p25 = `r(p25)'
+*p75 = .4343617
+*p25 = .1282808
+loc epsilon = 0.0000001
+
+tab provid if spp>= `p75'-`epsilon' & spp <= `p75'+`epsilon'
+*420015
+tab provid if spp>= `p25'-`epsilon' & spp <= `p25'+`epsilon'
+*310073
+
+sum read30_pac if provid==420015 & fy==2009
+*.25
+sum read30_pac if provid==310073 & fy==2009
+*.33
+
+
+sum vi_snf
+
+sum refhhi shref_bytopSNF
+
+
+*---------------------------------
 *-------------
 *use actual penalty rate
 
@@ -456,217 +553,6 @@ forval sn = 1/2 {
     }
   }
 }
-*-------------
-*for all the outcomes, when using the specification with interaction with year dummies, let's just plot the coefficients
-use ivpenalty_VI_agg3c, clear
-
-loc pnltprs2 sppX20*
-loc reform EHRstage1 EHRstage2 vbp_adjf HACstatus
-
-foreach yv of varlist read30 read30_pac shref refhhi shref_bytopSNF lnreqSNF_80pct den_nsnf_used {
-  loc n 2
-  xtreg `yv' `pnltprs`n'' `sp', fe cluster(provid)
-
-  tempfile `yv'
-  parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``yv'', replace)
-}
-
-
-tab vi_snf2008
-keep if vi_snf2008==0
-
-foreach yv of varlist vi_snf {
-  loc n 2
-  xtreg `yv' `pnltprs`n'' `sp' , fe cluster(provid)
-
-  tempfile `yv'
-  parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``yv'', replace)
-}
-
-use `read30', clear
-gen gp = "read30"
-foreach yv in "read30_pac" "shref" "refhhi" "shref_bytopSNF" "den_nsnf_used" "vi_snf" {
-  append using ``yv''
-  replace gp = "`yv'" if gp==""
-}
-assert gp!=""
-keep if regexm(parm, "spp")
-gen year = substr(parm, -4,4)
-
-compress
-outsheet using `reg'/coef_DiD_static_reform.csv, replace names comma
-
-*--------------------------
-* interpret results
-
-*25th & 75th percentile of penalty pressure
-sum spp, de
-loc p75 = `r(p75)'
-loc p25 = `r(p25)'
-*p75 = .4343617
-*p25 = .1282808
-loc epsilon = 0.0000001
-
-tab provid if spp>= `p75'-`epsilon' & spp <= `p75'+`epsilon'
-*420015
-tab provid if spp>= `p25'-`epsilon' & spp <= `p25'+`epsilon'
-*310073
-
-sum read30_pac if provid==420015 & fy==2009
-*.25
-sum read30_pac if provid==310073 & fy==2009
-*.33
-
-
-sum vi_snf
-
-sum refhhi shref_bytopSNF
-*--------------------------
-*export to R, the mean outcomes across hospitals over time for hospitals in top and bottom third of penalty pressure
-use ivpenalty_VI_agg3c, clear
-
-*keep provid fy read30 read30_pac refhhi shref_bytopSNF lnreqSNF_80pct den_nsnf_used shref vi_snf vi_snf2008
-
-bys fy: egen p33 = pctile(spp), p(33)
-bys fy: egen p66 = pctile(spp), p(66)
-
-keep if spp <= p33 | spp >= p66
-gen high = spp >= p66
-
-tab high post2011 if pionACO==1, summarize(shref)
-gsort provid -fy
-bys provid: replace pionACO=pionACO[_n-1] if fy!=2016
-
-tab high , summarize(pionACO)
-
-tab pionACO high, summarize(shref)
-tab high post2011 if pionACO==1, summarize(shref)
-
-
-*also get the sum of patient comorbidities
-egen comorbidsum = rowtotal(metacancer_ct-hipfracture_ct)
-
-preserve
-gen x = shref*dischnum
-replace x = round(x)
-drop dischnum_pac
-rename x dischnum_pac
-collapse (mean) read30 read30_pac refhhi shref_bytopSNF lnreqSNF_80pct den_nsnf_used shref nsnf_used comorbidsum dischnum_pac, by(fy high)
-tempfile tmp
-save `tmp'
-restore
-
-preserve
-keep if vi_snf2008==0
-collapse (mean) vi_snf , by(fy high)
-
-merge 1:1 fy high using `tmp', nogen
-
-renvars vi_snf-dischnum_pac \ v1-v11
-reshape long v, i(fy high) j(gp)
-
-gen x = "vi_snf" if gp==1
-replace x = "read30" if gp==2
-replace x = "read30_pac" if gp==3
-replace x = "refhhi" if gp==4
-replace x = "shref_bytopSNF" if gp==5
-replace x = "lnreqSNF_80pct" if gp==6
-replace x = "den_nsnf_used" if gp==7
-replace x = "shref" if gp==8
-replace x ="nsnf_used" if gp==9
-replace x ="comorbidsum" if gp==10
-replace x ="dischnum_pac" if gp==11
-drop gp
-rename x gp
-assert gp!=""
-rename v mean
-
-compress
-outsheet using `reg'/trend_bytertile.csv, comma names replace
-restore
-*--------------------------
-*descriptive stats
-use ivpenalty_VI_agg3c, clear
-
-*keep provid fy read30 read30_pac refhhi shref_bytopSNF lnreqSNF_80pct den_nsnf_used shref vi_snf vi_snf2008
-
-bys fy: egen p33 = pctile(spp), p(33)
-bys fy: egen p66 = pctile(spp), p(66)
-
-gen gp = "high" if spp >= p66
-replace gp = "medium" if spp >= p33 & spp < p66
-replace gp = "small" if spp < p33
-assert gp!=""
-
-loc comorbid metacancer_ct-hipfracture_ct
-loc sp _Ify_* own_* urban teaching _Isize* lnnsnf_mkt_samehrr black white `comorbid'
-loc reform EHRstage1 EHRstage2 vbp_adjf HACstatus
-
-gen small = size==1
-gen medium = size==2
-gen big = size==3
-lab var small "Beds <= 100"
-lab var medium "Beds 101-300"
-lab var big "Beds 301+"
-
-*mean characteristics for each group of hospitals pre & post-penalty
-loc outcome read30 read30_pac shref vi_snf refhhi shref_bytopSNF den_nsnf_used
-loc otherchars small medium big own_* urban teaching  black white lnnsnf_mkt_samehrr
-*comorbidity?
-
-lab var spp "Penalty pressure"
-lab var read30 "30-day readmission rate"
-lab var read30_pac "Readmission rate after referred to SNF"
-lab var shref "Probability of referring to SNF"
-lab var vi_snf "Probability of acquiring SNF"
-lab var refhhi "SNF referral HHI"
-lab var shref_bytopSNF "Share of referrals by top referred SNF"
-lab var den_nsnf_used "Num. SNFs referred / num. referrals"
-lab var own_np "Not-for-profit"
-lab var own_fp "For-profit"
-lab var own_gv "Government owned"
-lab var urban "Urban"
-lab var teaching "Teaching"
-lab var black "Share of black patients"
-lab var white "Share of white patients"
-lab var EHRstage1 "Adopted meaning use of EHR stage 1"
-lab var EHRstage2 "Adopted meaning use of EHR stage 2"
-lab var vbp_adjf "VBP payment adjustment factor"
-lab var HACstatus "Penalized for hospital-acquired condition reduction program"
-lab var lnnsnf_mkt_samehrr "Log number of SNFs in the same HRR"
-
-preserve
-keep if fy < 2011
-keep spp `outcome' `otherchars' `reform' gp
-order spp `outcome' `otherchars' `reform' gp
-
-bys gp: outreg2 using `reg'/summstats_pre.xls, replace sum(log) eqkeep(N mean) label
-restore
-
-preserve
-keep if fy >= 2011
-keep spp `outcome' `otherchars' `reform' gp
-order spp `outcome' `otherchars' `reform' gp
-
-bys gp: outreg2 using `reg'/summstats_post.xls, replace sum(log) eqkeep(N mean) label
-restore
-
-preserve
-keep spp `outcome' `otherchars' `reform' gp
-order spp `outcome' `otherchars' `reform' gp
-
-outreg2 using `reg'/summstats_all.xls, replace sum(log) eqkeep(N mean) label
-restore
-
-preserve
-keep if vi_snf2008==0
-keep spp `outcome' `otherchars' `reform' gp
-order spp `outcome' `otherchars' `reform' gp
-
-outreg2 using `reg'/summstats_noVI08.xls, replace sum(log) eqkeep(N mean) label
-restore
-
-
 *--------------------------
 *inertia in the outcomes
 use `an', clear

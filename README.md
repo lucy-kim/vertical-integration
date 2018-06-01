@@ -29,21 +29,27 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 2. `crindex_admit_chm_ddest.do`
   - create hospital-month-condition-discharge destination level index admissions data from the raw CSV file
 2. `crPACreferral_tchpm.do`
-  - Import hospital-month-condition-PAC provider level referral data separately for HHA and SNF
-  - HHA data available for 2010/7 - 2016/6 except 2012/6 (just not avail.)
+  - Import hospital-month-condition-PAC provider level referral data separately for SNF
   - SNF data available for 2008/1 - 2016/6 except 2012/6 (just not avail.)
+1. `crindex_admit_comorbid_chm.do`
+  - create index admission data for each condition-hospital-FY-comorbidity group
+3. `crSNFreferral_comorbid_chm.do`
+  - create SNF referral data for each condition-hospital-SNF-FY-comorbidity group
+1. `crindex_admit_dual_chy.do`
+  - create # index admissions and SNF referrals that are dual-eligible for each condition-hospital-FY
 6. `hospcr.sh` in `costreport_hosp` directory
   - Get hospital characteristics and total patient revenues for each FY from CMS Cost Report data
 7. `crhosp_chars_cr.do`
   - create hospital characteristics data from the HCRIS hospital cost report data for 2000-2015
-7. `crpac_mkt_hhi.do`
-  - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)
 1. `crhosp_compare.do`
   - Use hospital compare data to obtain risk-adjusted readmission rate for each hospital & national average during a 3-year window period (2008-2010)
 1. `crSNF_hrr_xwalk.do`
   - get HRR & HSA for each SNF in the Medicare claims data
-1. `crindex_admit_comorbid_chm.do`
-  - create index admission data for each condition-hospital-FY-comorbidity group
+1. `crsnf_deficiency.do`
+  - create SNF quality (deficiency counts) data from the SNF Compare archive database
+1. `crsnf_rating.do`
+  - create SNF quality (rating) data from the SNF Compare archive database
+
 
 ## Programs to obtain and clean data for hospital participation in other pay for performance programs
 1. `crhosp_bpci_participant.do`
@@ -57,17 +63,24 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 
 
 ## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration
+2. `predict_pnltprs.do`
+  - in each year t = 2011, 2012, 2013, ..., predict the likelihood of penalty, penalty rate, penalty dollar amount using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 3. `crhosp_fy_VI.do`
   - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
   - hospital characteristics from Hospital cost reports data
-1. `crVI_hospsmpl.do`
-2. `predict_pnltprs.do`
-2. `crpenalty_VI_agg3c.do`
+2. `anSNFquality.do`
+  - Do high-quality SNFs receive more referrals?
 3. `anpenalty_VI_agg3c.do`
+4. `tableformat.do`
+  - reshape coefficient estimate output into a formatted table
+1. `desc_trend_VI.do`
+  - descriptive analysis of the trend of vertical integration over time
+
+
 4. `ivpenalty_VI_bycond.do`
 5. `andynamicpp_VI_agg3c.do`
   - analyze the impact of dynamic penalty pressure on the integration outcome
-6. `dpm.do
+6. `dpm.do`
   - dynamic panel data model estimation: analyze the impact of dynamic penalty pressure on the integration outcome with a lagged outcome as a regressor
 1. `persistence.do`
   - persistence of penalty pressure and integration within a hospital
@@ -77,9 +90,8 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - why is there a dip in probability of referral in Jan 2011-May 2012?
 
 ## Describe the trend of hospital-PAC vertical integration
-  1. `desc_trend_VI.do`
-    - descriptive analysis of the trend of vertical integration over time
-  2. `desc_trend_VI2.do`
+
+  2. `desc_trend_VI2.do` - drop
 
 ## Misc. files not to be used for final analysis
 3. `crpenalty_VI_bycond.do`
@@ -90,3 +102,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
 5. `crinpat_pmt_hosp_fy_drg.do`
   - Create hospital-FY-condition level data on Medicare inpatient payment by combining the DRG-level counts from our internal Medicare data with the public DRG-level average payment payment data from CMS
+1. `crVI_hospsmpl.do` - skip
+2. `crpenalty_VI_agg3c.do` - skip
+7. `crpac_mkt_hhi.do` - drop ?
+  - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)

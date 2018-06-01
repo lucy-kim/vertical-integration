@@ -1,8 +1,10 @@
+*create index admission data for each condition-hospital-month-discharge destination code
+
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare
+cd `dta'/Medicare/corrected-hosplevel/results_index_snf_counts_May_25
 
-loc f index_freq.csv
+loc f "1.index_freq_May25.csv"
 insheet using `f', comma names clear
 tempfile index
 save `index'
@@ -11,7 +13,7 @@ gen ym = ym(dischyear, dischmth)
 sum ym
 loc fm = `r(min)'
 loc lm = `r(max)'
-*576 - 671
+*576 - 677
 format ym %tm
 
 tempfile tmp
@@ -56,4 +58,4 @@ assert fy!=.
 drop _m date
 
 compress
-save index_admit_chm_ddest, replace
+save `dta'/Medicare/index_admit_chm_ddest, replace

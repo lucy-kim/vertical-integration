@@ -2,15 +2,10 @@
 
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare
+cd `dta'/Medicare/corrected-hosplevel/2.comorbidities_index
 
-foreach d in "AMI" "HF" "PN" {
-  if "`d'"=="AMI" {
-    loc f `d'_comorbidity_v9_April_18th.csv
-  }
-  else {
-    loc f `d'_comorbidity_v7_April_17th.csv
-  }
+foreach d in "MI" "HF" "PN" "HK" {
+  loc f `d'_comorbidity_May_23rd.csv
   insheet using `f', comma names clear
   de
 
@@ -22,21 +17,22 @@ foreach d in "AMI" "HF" "PN" {
   duplicates drop
 
   gen condition = "`d'"
+  replace cond = "AMI" if cond=="MI"
 
   tempfile tmp_`d'
   save `tmp_`d''
 }
 
 clear
-foreach d in "AMI" "HF" "PN" {
+foreach d in "MI" "HF" "PN" "HK" {
   append using `tmp_`d''
 }
 
 compress
-save index_admit_comorbid_chm, replace
+save `dta'/Medicare/index_admit_comorbid_chm, replace
 
 
-foreach d in "AMI" "HF" "PN" {
+foreach d in "MI" "HF" "PN" "HK" {
   use `tmp_`d'', clear
 
   *create quarters using months
@@ -54,45 +50,19 @@ foreach d in "AMI" "HF" "PN" {
   assert fy!=.
   tab fy
 
-  collapse (sum) metacancer-hipfracture_ct, by(provid fy)
-  gen condition = "`d'"
+  collapse (sum) metacancer-hipfracture_ct, by(cond provid fy)
 
   tempfile tmp_`d'2
   save `tmp_`d'2'
 }
-/*
-loc d "AMI"
-use `tmp_`d'', clear
-sum fy
-loc lm = `r(max)'
-loc fm = `r(min)'
-
-*create a base FY list & expand
-keep provid metacancer-ulcers
-foreach v of varlist  metacancer-ulcers {
-replace `v' = 0
-}
-duplicates drop
-
-loc g = `lm' - `fm' + 1
-expand `g'
-bys provid: gen fy = `fm' + _n-1
-
-merge 1:1 provid fy using `tmp_`d''
-
-*fill in zero's if unmatched
-sort cond provid drgcd fy
-replace count = 0 if _m==1
-
-drop _m */
 
 clear
-foreach d in "AMI" "HF" "PN" {
+foreach d in "MI" "HF" "PN" "HK" {
   append using `tmp_`d'2'
 }
 
 compress
-save index_admit_comorbid_chy, replace
+save  `dta'/Medicare/index_admit_comorbid_chy, replace
 
 *----------------------------------
 loc d AMI

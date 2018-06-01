@@ -6,7 +6,7 @@ module load stata/13
 
 cd /ifs/home/kimk13/VI
 
-stata-se -q -b do crhosp_bpci_participant.do
+stata-se -q -b do iv2.do
 
 #$ -N sasjob01 #$ -j y
 # sas -nodms -noterminal download_pos.sas
