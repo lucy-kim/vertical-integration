@@ -130,6 +130,9 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
         when (WKSHT_CD EQ "S200001" and CLMN_NUM="0010" and LINE_NUM="11900") varname="malprins_liablim1"; * malpractice insurance liability limit per lawsuit;
         when (WKSHT_CD EQ "S200001" and CLMN_NUM="0020" and LINE_NUM="11900") varname="malprins_liablim2"; * malpractice insurance liability limit per policy year;
 
+        *ACO ;
+        when ( WKSHT_CD EQ "E00A18A" and CLMN_NUM="0010" and LINE_NUM="07089") varname="pionACO";  /* Pioneer ACO demonstration payment adjustment amount */
+
         otherwise;
       end;
     run;

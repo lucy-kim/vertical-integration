@@ -6,7 +6,7 @@ loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-use hosp_fy_VI, clear
+use hosp_fy_VI_agg3c, clear
 
 *drop FY 2008 since only second half of the year available
 drop if fy==2008
@@ -16,67 +16,145 @@ gen str6 provid_str = string(provid, "%06.0f")
 gen st = substr(provid_str, 1,2)
 count if st=="21" | st=="80"
 *https://www.cms.gov/Regulations-and-Guidance/Guidance/Transmittals/downloads/R29SOMA.pdf
-drop if st=="21"
-
-keep if pac=="SNF"
+drop if st=="21" | st=="80"
 
 drop if beds==.
 * 18 hospitals
 
-duplicates tag pac cond provid fy, gen(dup)
+duplicates tag provid fy, gen(dup)
 assert dup==0
 drop dup
-
-*restrict to hospital-conditions whose mean # referrals to SNF over 2009-2011 is at least 15
+/*
+*restrict to hospital-conditions whose mean # referrals to SNF over 2009-2010 is at least 30
 capture drop mdischnum_pac x
-bys provid cond: egen x = mean(dischnum_pac) if fy < 2012
-bys provid cond: egen mdischnum_pac = max(x)
-tab cond fy if mdischnum_pac > 15
-sort provid cond fy
-list provid cond fy dischnum_pac mdisch in 100/200
+bys provid: egen x = mean(dischnum_pac) if fy < 2011
+bys provid: egen mdischnum_pac = max(x)
+sum mdischnum_pac, de
+*median is 43.5
+tab fy if mdischnum_pac > 30
+*1763 hospitals*/
 
-*restrict to hospital-conditions whose mean # discharges over 2009-2011 is at least 25
-capture drop x
-bys provid cond: egen x = mean(dischnum) if fy < 2012
-bys provid cond: egen mdischnum = max(x)
-tab cond fy if mdischnum > 25
 
-*drop small hospitals whose min # bed < 30
+/*what is the penalty
 capture drop x
-bys provid: egen x = min(beds)
-tab cond fy if x >= 30
-drop if x < 30
+gen x = pnltr > 0 if fy==2013
+bys provid: egen penalized2013 = max(x)
+capture drop x
+gen x = pnltr if fy==2013
+bys provid: egen pnltr2013 = max(x)
+table fy if mdischnum_pac > 30, content(mean penalized2013 mean pnltr2013)
+table fy, content(mean penalized2013 mean pnltr2013)
+*if restrict to hospitals with at least 50 referrals, the */
+
+
+*drop hospital if # referrals==1 or 0 for any one of the years
+capture drop x
+bys provid: egen x = min(dischnum_pac)
+tab x if x < 10
+tab provid if x < 2
+*only 1 hospital
+sort provid fy
+list provid fy dischnum_pac if provid==330224
+drop if x < 2
 
 *also restrict to hospitals that appeared throught 2008-2016
 capture drop x
 gen x = dischnum > 0
-bys provid cond: egen sx = sum(x)
+bys provid: egen sx = sum(x)
 tab sx
-tab cond fy if sx < 8
+tab fy if sx < 8
 
-keep if mdischnum_pac >= 15 & sx==8 & mdischnum >= 25
-drop sx mdischnum_pac mdischnum
+tab fy
+*3342 hospitals
+keep if sx==8
+tab fy
+*1726 hospitals
 
-tab cond fy
-
-*drop hospital-conditions if # referrals==1 or 0 for any one of the years
-capture drop x
-bys pac cond provid: egen x = min(dischnum_pac)
-tab x
-tab provid if x < 2
-sort provid cond fy
-list provid cond fy dischnum_pac if provid==140034
-drop if x < 2
 
 *referral HHI should be missing, not zero, if dischnum_pac = 0
-replace refhhi = . if dischnum_pac==0
+foreach v of varlist refhhi* {
+  replace `v' = . if dischnum_pac==0
+}
+
+drop sx mdischnum_pac mdischnum x provid_str st
+
+foreach v of varlist white black read30 read60 read90 {
+  replace `v' = `v' / dischnum
+}
+foreach v of varlist read30_pac read60_pac read90_pac samh30_pac samh60_pac samh90_pac {
+  replace `v' = `v' / dischnum_pac
+}
+
+lab var dischnum_pac "Number of referrals to SNF"
+lab var refhhi_AMI "SNF referral concentration for AMI"
+lab var refhhi_HF "SNF referral concentration for HF"
+lab var refhhi_PN "SNF referral concentration for PN"
+lab var refhhi3 "SNF referral concentration"
+lab var vi_snf "Formally own SNF"
+lab var beds "Number of beds"
+lab var dischnum "Total number of discharges"
+lab var white "Number of white patients"
+lab var black "Number of black patients"
+lab var read30 "30-day readmission rate, all discharges"
+lab var read60 "31 to 60-day readmission rate, all discharges"
+lab var read90 "61 to 90-day readmission rate, all discharges"
+lab var read30_pac "30-day readmission rate, discharges to SNF"
+lab var read60_pac "31 to 60-day readmission rate, discharges to SNF"
+lab var read90_pac "61 to 90-day readmission rate, discharges to SNF"
+lab var samh30_pac "30-day readmission rate to the same hospital, discharges to SNF"
+lab var samh60_pac "31 to 60-day readmission rate to the same hospital, discharges to SNF"
+lab var samh90_pac "61 to 90-day readmission rate to the same hospital, discharges to SNF"
+lab var ses_score "Mean SES score"
+lab var teaching "Teaching"
+lab var urban "Urban"
+lab var own_fp "For profit"
+lab var own_np "Not for profit"
+lab var own_gv "Government owned"
+lab var uncomp1 "Uncompensated care"
+lab var dissh "DSH payment"
+lab var mcr_pmt "Medicare DRG payment ($)"
+lab var tot_pat_rev "Total patient revenue ($)"
+
+/* *drop 6 hospitals that didn't use SNFs previously
+gen x = refhhi_prevSNFs==.
+bys provid: egen noprevSNF =max(x)
+drop if noprevSNF==1
+drop x noprevSNF */
 
 tempfile tmp
 save `tmp'
+compress
+save VI_hospsmpl_agg3c, replace
+
+*--------------------------------
+*before matching, compare characteristics of penalzied & non-penalized hospitals
+use `tmp', clear
+
+loc outc dischnum_pac shref refhhi* vi_snf nsnf_used shsnf_used nsnf_used_again shsnf_used_again rat_nsnf_used_now_before
+loc hospchar beds dischnum-ses_score read30_pac-samh90_pac  teaching-tot_pat_rev mcr_pmt nsnf_hrr_fy
+des `outc' `hospchar'
+
+foreach v of varlist mcr_pmt {
+  replace `v' = `v'/1000
+}
+foreach v of varlist tot_pat_rev {
+  replace `v' = `v'/100000
+}
+lab var mcr_pmt "Medicare DRG payment ($1,000s)"
+lab var tot_pat_rev "Total patient revenue ($100,000s)"
+
+gen post = fy >= 2011
+keep `outc' `hospchar' post penalized2013
+order `outc' `hospchar'
+
+bysort post penalized2013: outreg2 using `reg'/summ.xls, label replace sum(log) eqkeep(N mean) tex
+
+
+
 *--------------------------------
 *match penalized hospitals with non-penalized hospitals
 
-*use the sample of hospitals that were penalized & regress the actual penalty rate in 2013 on baseline hospital characteristics
+/* *use the sample of hospitals that were penalized & regress the actual penalty rate in 2013 on baseline hospital characteristics
 use `tmp', clear
 rename err*, upper
 
@@ -229,14 +307,15 @@ tab cond fy if _m==3
 gen matched = _m==3
 drop _m
 tab cond fy
-tab cond fy if matched==1
+tab cond fy if matched==1 */
 
+use `tmp', clear
 compress
-save VI_hospsmpl, replace
+save VI_hospsmpl_agg3c, replace
 
 *---------------------
 *compare the full sample with matched sample in terms of size, referral HHI
-use VI_hospsmpl, clear
+use VI_hospsmpl_agg3c, clear
 drop if cond=="HK"
 
 preserve

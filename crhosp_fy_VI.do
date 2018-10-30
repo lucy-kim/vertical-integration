@@ -1,48 +1,35 @@
 *create hospital-FY level data containing the VI measures, hospital characteristics
 
-loc gph /ifs/home/kimk13/VI/gph
-loc reg /ifs/home/kimk13/VI/tbls
 loc dta /ifs/home/kimk13/VI/data
 
 cd `dta'/Medicare
 
-*construct hosp-FY level data containing referral concentration for each PAC type (SNF/HHA)-condition
-*aggregate to the hospital-PAC provider-FY level
-*use referral_tchpm, clear
-use PACreferral_tchpm, clear
-*drop if pac==""
-collapse (sum) dischnum_pac, by(pac condition provid fy pacprovid)
-
-* by condition-FY, level & growth rate of referral concentration among PAC providers
-bys pac condition provid fy: egen tot = sum(dischnum)
-gen refshsq = (dischnum/tot)^2
-
-*aggregate to the hospital-FY level
-collapse (sum) refhhi = refshsq, by(pac condition provid fy)
-assert refhhi <= 1
-
-tempfile hosp_fy_ref
-save `hosp_fy_ref'
-*----------------------------------------
 *construct the referral HHI lumping all 3 conditions: AMI, HF, PN
-use PACreferral_tchpm, clear
+use SNFreferral_tchpy_nosw.dta, clear
 drop if cond=="HK"
-collapse (sum) dischnum_pac, by(pac provid fy pacprovid)
+assert dischnum_pac==0 if pacprovid==.
+
+tempfile snf_fy
+save `snf_fy'
+
+*construct the referral HHI lumping all 3 conditions: AMI, HF, PN
+use `snf_fy', clear
+collapse (sum) dischnum_pac, by(provid fy pacprovid)
+assert dischnum_pac==0 if pacprovid==.
 
 * by condition-FY, level & growth rate of referral concentration among PAC providers
-bys pac provid fy: egen tot = sum(dischnum)
+bys provid fy: egen tot = sum(dischnum)
 gen refshsq = (dischnum/tot)^2
 
 *aggregate to the hospital-FY level
-collapse (sum) refhhi = refshsq, by(pac provid fy)
+collapse (sum) refhhi = refshsq, by(provid fy)
 assert refhhi <= 1
 rename refhhi refhhi3
 
 tempfile hosp_fy_ref3
 save `hosp_fy_ref3'
-*------------------------------------
-* construct hosp-FY level data using the index admissions data
 
+*------------------------------------
 *restrict to hospitals that are subject to HRRP penalty; keep only hospitals that are penalized in FY 2015
 use `dta'/hrrp_penalty, clear
 keep if fy ==2013
@@ -52,59 +39,42 @@ destring provid, replace
 tempfile hosp_keep
 save `hosp_keep'
 
-/* *tag hospitals whose number of discharges for each of those conditions in 2008 is >= 50
-use index_admit_chm.dta, clear
-sum fy
-keep if fy==r(min)
-collapse (sum) dischnum, by(provid)
-drop if dischnum < 50
-keep provid
-duplicates drop
-tempfile hosp_keep2
-save `hosp_keep2' */
-
-*tag hospitals whose number of referrals for all those conditions in the first year available is < 10
-use PACreferral_tchpm, clear
-
-*from the PAC referral data, create hospital-FY level data
-collapse (sum) dischnum_pac-samh90_pac, by(pac condition provid fy)
+*------------------------------------
+*aggregate across conditions and create hospital-FY level data
+use `snf_fy', clear
+collapse (sum) dischnum_pac-black_pac, by(provid fy)
 tempfile ref
 save `ref'
 
-/* collapse (sum) dischnum, by(pac provid fy)
-keep if fy==2008 & pac=="SNF" | fy==2011 & pac=="HHA"
-tab pac if dischnum_pac >= 10
-drop if dischnum < 10
-keep pac provid
-duplicates drop
-tempfile hosp_keep3
-save `hosp_keep3' */
+*------------------------------------
+* construct hosp-FY level data using the index admissions data
 
-use index_admit_chm, clear
+use index_admit_chy, clear
+drop if cond=="HK"
 merge m:1 provid using `hosp_keep', keep(3) nogen
-/* merge m:1 provid using `hosp_keep2', keep(3) nogen */
 
-collapse (sum) dischnum-read90 (mean) ses_score, by(condition provid fy)
+collapse (sum) dischnum-read90 (mean) ses_score, by(provid fy)
 
-expand 2
-bys condition provid fy: gen pac = "SNF" if _n==1
-bys condition provid fy: replace pac = "HHA" if _n==2
+merge 1:1 provid fy using `ref', keep(1 3)
+assert _m==1 if dischnum==0
 
-*restrict to hospitals that make 10+ referrals across all conditions in the first year available
-/* merge m:1 pac provid using `hosp_keep3', keep(3) nogen */
-
-merge 1:1 pac condition provid fy using `ref', keep(1 3)
-foreach v of varlist *_pac {
-  replace `v' = 0 if _m==1
+foreach v of varlist dischnum_pac-black_pac {
+  replace `v' = 0 if dischnum==0
 }
-drop _m
 
-*merge with referral HHI data
-merge 1:1 pac condition provid fy using `hosp_fy_ref', keep(1 3) nogen
-*unmatched obs mean no referrals in that FY
+count if dischnum_pac==. & dischnum_pac!=0
+
+*drop hospitals if the # referrals is missing for a part of the sample period while the # discharges > 0
+assert dischnum!=.
+gen x = dischnum_pac==. & dischnum_pac!=0
+bys provid: egen max = max(x)
+drop if max==1
+drop x max _m
+assert dischnum_pac!=.
 
 *merge with referral HHI data for 3 initial conditions lumped
-merge m:1 pac provid fy using `hosp_fy_ref3', keep(1 3) nogen
+merge 1:1 provid fy using `hosp_fy_ref3', keep(1 3) nogen
+*199 hospitals have no referrals
 
 tempfile tmp
 save `tmp'
@@ -112,296 +82,317 @@ save `tmp'
 *----------------
 *merge with hospital chars data from cost report
 
-*fill in missing values for variables in the cost report
-/* use `dta'/costreport/hosp_chars_cr, clear
-drop vi_renal-vi_asc vi_ipf vi_swbsnf-vi_rhc vi_hospice vi_nf
-destring prov_num, gen(provid)
-rename fyear fy
-drop prov_num
-
-sort provid fy
-foreach v of varlist vi_snf-urban {
-  bys provid: replace `v'=`v'[_n-1] if `v'>=.
-}
-gsort provid -fy
-foreach v of varlist vi_snf-urban {
-  bys provid: replace `v'=`v'[_n-1] if `v'>=.
-}
-drop if beds==.
-
-tempfile cr
-save `cr'
-
-*for each hospital, add a row for 2016 and replace with 2015 values
-keep if fy==2015
-duplicates tag provid, gen(dup)
-assert dup==0
-drop dup
-expand 2
-sort provid
-bys provid: replace fy = 2016 if _n==2
-drop if fy==2015
-tempfile cr2016
-save `cr2016'
-
-*for now, for each hospital, add rows for 2008-2010 and replace with 2011 values
-use `cr', clear
-keep if fy==2011
-duplicates tag provid, gen(dup)
-assert dup==0
-drop dup
-expand 4
-sort provid
-bys provid: replace fy = 2007+ _n
-assert fy >= 2008 & fy <=2011
-drop if fy==2011
-tempfile cr_pre11
-save `cr_pre11'
-
-*append
-use `cr', clear
-append using `cr_pre11'
-append using `cr2016'
-tempfile crappended
-save `crappended'
-
-use `cr', clear
-keep provid
-duplicates drop
-expand 2016-2007
-bys provid: gen fy = 2008+_n-1
-merge 1:1 provid fy using `crappended'
-drop state
-
-sort provid fy
-foreach v of varlist vi_snf-urban {
-  bys provid: replace `v'=`v'[_n-1] if `v'>=.
-}
-gsort provid -fy
-drop state
-foreach v of varlist vi_snf-urban {
-  bys provid: replace `v'=`v'[_n-1] if `v'>=.
-}
-
-*redefine hospital size by # bed (roughly based on https://www.hcup-us.ahrq.gov/db/vars/hosp_bedsize/nisnote.jsp)
-drop size
-gen size = 1 if beds <= 100
-replace size = 2 if beds >100 & beds <= 300
-replace size = 3 if beds > 300
-assert size!=.
-replace size = . if beds==.
-
-tempfile crfinal
-save `crfinal' */
-
-*merge the referral data with cost report data
 use `tmp', clear
-/* merge m:1 provid fy using `crfinal', keep(1 3) nogen */
-merge m:1 provid fy using `dta'/costreport/hosp_chars_cr, keep(1 3)
+merge 1:1 provid fy using `dta'/costreport/hosp_chars_cr, keep(1 3)
 drop vi_renal-vi_asc vi_ipf vi_swbsnf-vi_rhc vi_hospice vi_nf
 
 gsort provid fy -_m
 foreach v of varlist vi_snf-size {
   bys provid: replace `v'=`v'[_n-1] if `v'>=.
 }
+gsort provid -fy
+foreach v of varlist vi_snf-size {
+  bys provid: replace `v'=`v'[_n-1] if `v'>=.
+}
 drop _m
 
-/* * exclude hospitals with small # beds
-bys provid: egen a = min(beds)
-sum beds if a >= 30
-drop if a < 30
-drop a
-sum beds */
-
-*merge with PAC market concentration
 *get HRR, HSA of hospital from dartmouth atlas data
 rename provid provider
 merge m:1 provid using /ifs/home/kimk13/VI/data/dartmouth/hosp_hrr_xwalk, keepusing(hrrnum hsanum) keep(1 3) nogen
 rename provider provid
 
-*merge with HRR (HSA)-FY level PAC market HHI data
-capture drop _m
-foreach g0 in "hrr" "hsa" {
-  loc g `g0'num
-  merge m:1 `g' provid fy using `dta'/`g0'hhi, keep(1 3) nogen
+*----------------
+*merge with dual-eligibility count data
+preserve
+use index_admit_dual_chy_nosw, clear
+drop if cond=="HK"
+collapse (sum) *_dual snf_count, by(provid fy)
+tempfile index_admit_dual_chy
+save `index_admit_dual_chy'
+restore
+
+merge 1:1 provid fy using `index_admit_dual_chy', keep(1 3) nogen
+
+*Calculate dual rate
+loc v index_dual
+gen `v'_rate = `v' / dischnum
+loc v snf_dual
+gen `v'_rate = `v' / dischnum_pac
+
+foreach v of varlist index_dual snf_dual {
+  assert `v'_rate >= 0 &  `v'_rate <=1 if `v'_rate !=.
 }
+
+*----------------
+*merge with comorbidity count data
+preserve
+use index_admit_comorbid_chy, clear
+drop if cond=="HK"
+collapse (sum) metaca-hipfrac, by(provid fy)
+tempfile index_admit_comorbid_chy
+save `index_admit_comorbid_chy'
+restore
+
+merge 1:1 provid fy using `index_admit_comorbid_chy', keep(1 3) nogen
+
+*----------------
+*merge with comorbidity count data among SNF-referred patients
+preserve
+use SNFreferral_comorbid_chy_nosw, clear
+drop if cond=="HK"
+collapse (sum) metaca-hipfrac, by(provid fy)
+foreach v of varlist metaca-hipfrac {
+  rename `v' `v'_snf
+}
+tempfile SNFreferral_comorbid_chy
+save `SNFreferral_comorbid_chy'
+restore
+
+merge 1:1 provid fy using `SNFreferral_comorbid_chy', keep(1 3) nogen
 
 tempfile init
 save `init'
 
-*------------------------------------
-*merge with HRRP data
-use `dta'/hrrp_penalty, clear
-drop if fy > 2016
-assert err_hk!=. if fy>=2015
-foreach d in "ami" "hf" "pn" "hk" "copd" {
-    di "`d'"
-    sum n_`d' if err_`d'==0
-    replace err_`d' = . if err_`d'==0
-}
-*ERR = 0 if # cases for the condition is < 25
+*--------------------------------
+* create more outcomes:
 
-*get distribution of the number of cases
+*create % of patients accounted for by the top SNF
+use `snf_fy', clear
+collapse (sum) dischnum_pac, by(provid pacprovid fy)
+bys provid fy: egen maxref = max(dischnum_pac)
 
-destring provid, replace
+*count # SNFs getting the largest # referrals
+gen x = maxref==dischnum_pac
+bys provid fy: egen sx = sum(x)
+tab sx
+* range from 1 (94%)-13
+bys provid fy: egen totref = sum(dischnum_pac)
+gen shref_bytopSNF =  dischnum_pac/totref if x==1
 
-tempfile penalty
-save `penalty'
+*create # SNFs that received 80% of referrals
+gsort provid fy -dischnum_pac
+bys provid fy: gen cumref = sum(dischnum_pac)
+gen cumshref = cumref/totref
+gen below80 = cumshref <= 0.8
+bys provid fy: egen reqSNF_80pct = sum(below80)
+replace reqSNF_80pct = reqSNF_80pct + 1
 
-*------------------------------------
-*merge the VI data with penalty data
-use `init', clear
-merge m:1 provid fy using `penalty', keep(1 3) nogen
-*note: some hospitals are matched to penalty data only for after 2013 - identify these by finding pnltr==.
+*# SNF used
+gen nsnf_used = dischnum_pac > 0
 
-/* *append pre-2011 data from the index admissions data
-preserve
-use `index2_fy', clear
-keep if fy < 2011
-tempfile index2_fy_pre2011
-save `index2_fy_pre2011'
-restore
-
-append using `index2_fy_pre2011' */
-
-*---------------------
-
-/* *restrict to hospitals that have # discharges >= 30 in FY 2011
-foreach c in "AMI" "HF" "PN" "HK" {
-  gen x = dischnum if fy==2011 & cond=="`c'"
-  bys provid: egen xx = max(x)
-  drop if xx < 10
-  drop x xx
-}
-
-*restrict to hospitals that have # discharges >= 30 in FY 2011
-foreach c in "AMI" "HF" "PN" "HK" {
-  sum dischnum if fy==2011 & cond=="`c'"
-}
-tab fy if cond=="AMI" & pac=="SNF"
- */
-
-*---------------------
-*merge with inpatient Medicare payment data for each condition
-
-merge m:1 cond provid fy using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_chy, keep(1 3) nogen
-
-/* merge m:1 cond provid using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_2014, keep(1 3)
-merge m:1 provid using `dta'/Medicare/inpat-utilization-and-payment-PUF/inpat_pmt_hk_hosp, keep(1 3) */
-
-tempfile tmp
-save `tmp'
+collapse (sum) nsnf_used (mean) reqSNF_80pct (max) shref_bytopSNF, by(provid fy)
+tempfile newoutcome
+save `newoutcome'
 
 *--------------------------------
-* create 3 more outcomes: % of previous SNFs getting referrals, % HRR-level SNFs getting referrals, referral HHI among previously used SNFs for each year
-use PACreferral_tchpm, clear
+*number of SNFs in the same HRR as hospital
 
-*obtain HRR for each hospital
-*merge with HRR data
-rename provid provider
-merge m:1 provider using `dta'/dartmouth/hosp_hrr_xwalk, keep(1 3) nogen
+*using the SNF POS data, count # SNFs in each HRR
+*get # available SNFs in the hospital's HRR (who receives at least one referral from a hospital in the market)
+*create # SNFs in each year-HRR
+loc file `dta'/dartmouth/ZipHsaHrr14
+insheet using `file'.csv, comma names clear
+rename zip zip
+tempfile zip_hrr
+save `zip_hrr'
 
-collapse (sum) dischnum_pac, by(hrrnum pac condition provid fy pacprovid)
+clear
+forval y=2008/2016 {
+  append using `dta'/pos/snfpos`y'
+}
 
-*in the hospital's HRR in each year, how many SNFs are there
-preserve
-keep hrrnum pac fy pacprovid
-duplicates drop
-gen i = pacprovid!=.
-collapse (sum) nsnf_hrr_fy = i, by(hrrnum pac fy)
-replace nsnf_hrr_fy = . if hrrnum==.
+*restrict to SNF
+gen sid = string(provid_pac, "%06.0f")
+gen last4 = substr(sid,3,4)
+destring last4, replace
+assert last4 >= 5000 & last4 <= 6499
+
+merge m:1 zip using `zip_hrr', keep(3) nogen
+
+sort hrrnum fy
+gen nsnf = beds > 0
+
+collapse (sum) nsnf, by(hrrnum fy)
 tempfile nsnf
 save `nsnf'
-restore
 
-*how many PAC providers does a hospital refer to in each FY?
-gen use = dischnum_pac > 0
-bys pac cond provid fy: egen nsnf_used = sum(use)
+*--------------------------------
 
-merge m:1 hrrnum pac fy using `nsnf', keep(1 3) nogen
+use `init', clear
 
-* % SNFs in the HRR used by the hospital-FY for each condition
-gen shsnf_used = nsnf_used/nsnf_hrr_fy
-sum shsnf_used, de
-assert shsnf_used ==. if hrrnum==.
+*merge with HRR-year level data on # SNF in each HRR
+merge m:1 fy hrrnum using `nsnf', keep(1 3) nogen
+rename nsnf nsnf_samehrr
 
-tempfile shsnf_used
-save `shsnf_used'
+*merge with more outcomes
+merge 1:1 provid fy using `newoutcome', keep(1 3) nogen
 
-* calculate % of previous SNFs getting referrals: for previous SNFs, look at the SNFs used in the previous FY (for 2009, look at only the 2nd half of 2008)
+*create SNF referral density := # referrals/# SNFs used
+gen refdensity = dischnum_pac/nsnf_used
 
-*create a balanced yearly panel for each hospital-SNF pair
-preserve
-keep pac cond provid pacprovid
-duplicates drop
-expand 2016-2007
-bys pac cond provid pacprovid: gen fy = 2008+_n-1
-assert fy!=. & fy >= 2008 & fy <= 2016
-tempfile balanced_pair
-save `balanced_pair'
-restore
+*create share of discharges referred to SNF
+gen shref = dischnum_pac / dischnum
+lab var shref "Share of discharges referred to SNF"
 
-merge 1:1 pac cond provid pacprovid fy using `balanced_pair'
-replace dischnum_pac = 0 if _m==2
+*count hospitals if # admissions = 0 at any point in time
+gen x = dischnum==0
+bys provid: egen zeroadmit = max(x)
+drop if zeroadmit==1
+drop x zeroadmit
 
-sort pac cond provid pacprovid fy
-bys pac cond provid pacprovid: gen used_before = dischnum_pac[_n-1] > 0 & dischnum_pac[_n-1]!=.
-replace used_before = . if fy==2008
+assert shref >=0 & shref <=1
 
-* count # SNFs used previously
-bys pac cond provid fy: egen nsnf_used_before = sum(used_before)
+*drop Maryland hospitals
+gen str6 provid_str = string(provid, "%06.0f")
+gen st = substr(provid_str, 1,2)
+count if st=="21" | st=="80"
+*https://www.cms.gov/Regulations-and-Guidance/Guidance/Transmittals/downloads/R29SOMA.pdf
+drop if st=="21" | st=="80"
+drop st
 
-*share of previously used SNFs that are used again this year
-gen used_again = used_before * (dischnum_pac > 0)
-bys pac cond provid fy: egen nsnf_used_again = sum(used_again)
-gen shsnf_used_again = nsnf_used_again / nsnf_used_before
-sum shsnf_used_again
-assert shsnf_used_again >= 0 & shsnf_used_again <=1 if shsnf_used_again!=.
+drop if beds==.
+* 18 hospitals
 
-gen rat_nsnf_used_now_before = nsnf_used / nsnf_used_before
+*referral HHI should be missing, not zero, if dischnum_pac = 0
+foreach v of varlist refhhi* {
+  replace `v' = . if dischnum_pac==0
+}
 
-*calculate the referral HHI among previously used SNFs for each year
-preserve
-keep if used_again==1
-bys pac condition provid fy: egen tot = sum(dischnum_pac)
-gen refshsq = (dischnum/tot)^2
+foreach v of varlist white black read30 read60 read90 {
+  replace `v' = `v' / dischnum
+  assert `v' >=0 & `v' <= 1 if `v'!=.
+}
+foreach v of varlist white_pac black_pac read30_pac read60_pac read90_pac samh30_pac samh60_pac samh90_pac {
+  replace `v' = `v' / dischnum_pac
+  assert `v' >=0 & `v' <= 1 if `v'!=.
+}
 
-*aggregate to the hospital-FY level
-collapse (sum) refhhi = refshsq, by(pac condition provid fy)
-assert refhhi <= 1
-rename refhhi refhhi_prevSNFs
+* get share of patients in each comorbidity category
+foreach v of varlist metacancer_ct-hipfracture_ct {
+  di "`v'------------"
+  qui replace `v' = `v'/dischnum
 
-tempfile ref_oldSNF
-save `ref_oldSNF'
-restore
+  qui count if `v' > 1 & `v'!=.
+  di "`v': `r(N)' obs have the rate > 1"
+  assert `v' >=0 & `v' <= 1 if `v'!=.
+  sum `v'
+  di ""
+}
 
-merge m:1 pac condition provid fy using `ref_oldSNF', keep(1 3) nogen
+*for SNF refered patients
+*list provid fy dischnum_pac copd*f if provid==370097
+foreach v of varlist metacancer_ct_snf-hipfracture_ct_snf {
+  qui replace `v' = `v'/dischnum_pac
 
-sort pac cond provid pacprovid fy
-list pac cond provid pacprovid fy dischnum_pac used_before used_again shsnf_used_again in 1/10
+  qui count if `v' > 1 & `v'!=.
+  di "`v': `r(N)' obs have the rate > 1"
+  assert `v' >=0 & `v' <= 1 if `v'!=.
+  qui sum `v'
+  di ""
+}
 
-collapse (max) shsnf_used nsnf_used nsnf_hrr_fy nsnf_used_again  nsnf_used_before refhhi_prevSNFs rat_nsnf_used shsnf_used_ag, by(pac condition provid fy)
+loc int 2011
+gen post`int' = fy >=`int'
 
-lab var shsnf_used_again "Share of previously used SNFs used again"
-lab var rat_nsnf_used_now_before "Ratio of # SNFs used in current year to previous year"
-lab var shsnf_used "Share of SNFs in the HRR used by the hospital-FY"
-lab var nsnf_hrr_fy "Total number of SNFs being used by hospitals in the HRR"
-lab var nsnf_used "Number of SNFs used"
-lab var nsnf_used_again "Number of SNFs used again"
-lab var nsnf_used_bef "Number of SNFs used in the previous year"
-lab var refhhi_prevSNFs "Referral HHI among SNFs used in the previous year"
+*create laggeed formally owning SNF
+sort provid fy
+bys provid: gen vi_snf_l = vi_snf[_n-1]
+tab fy, summarize(vi_snf_l)
+lab var vi_snf_l "Owns SNF, lagged"
 
-rename provider provid
+*merge with penalty pressure data
+merge m:1 provid using predict_pnltprs, keep(3) nogen
+drop if ppr==.
 
-tempfile newoutcomes
-save `newoutcomes'
-*---------------------
+*-----------------------
+*add participation in other value-based reforms
+*-----------------------
 
-use `tmp', clear
-merge 1:1 pac condition provid fy using `newoutcomes', keep(1 3) nogen
+*EHR
+merge m:1 provid fy using EHR-MU/ehr, keep(1 3)
+sort provid fy
+replace EHRstage1=0 if _m==1
+replace EHRstage2=0 if _m==1
+assert EHRstage1!=. & EHRstage2!=.
+drop _m
+
+*VBP
+merge m:1 provid fy using VBP/vbp, keep(1 3)
+tab fy if _m==1
+*list cond provid fy _m vbp_adjf if provid==670055
+replace vbp_adjf=1 if _m==1
+assert vbp_adjf!=.
+drop _m
+
+*HAC
+merge m:1 provid fy using HAC/hac, keep(1 3)
+tab fy if _m==1
+*2015 & 2016 all matched
+replace HACstatus = 0 if _m==1
+assert HACstatus!=.
+drop _m HACscore
+
+*BPCI
+gen CCN =string(provid, "%06.0f")
+merge m:1 CCN fy using BPCI/hosp_bpci_participant, keep(1 3)
+tab fy if _m==1
+replace bpci = 0 if _m==1
+assert bpci!=.
+drop _m
+
+*ACO
+capture drop pionACO
+merge m:1 provid fy using ../costreport/hosp_chars_cr, keep(1 3) keepusing(pionACO)
+tab fy if _m==1
+bys provid: egen mm = max(pionACO)
+replace pionACO = mm if _m==1 & pionACO==.
+replace pionACO = 0 if fy < 2011
+assert pionACO!=.
+drop mm _m
+
+lab var dischnum_pac "Number of referrals to SNF"
+lab var refhhi3 "SNF referral concentration"
+lab var vi_snf "Formally own SNF"
+lab var beds "Number of beds"
+lab var dischnum "Total number of discharges"
+lab var white "Number of white patients"
+lab var black "Number of black patients"
+lab var read30 "30-day readmission rate, all discharges"
+lab var read60 "31 to 60-day readmission rate, all discharges"
+lab var read90 "61 to 90-day readmission rate, all discharges"
+lab var read30_pac "30-day readmission rate, discharges to SNF"
+lab var read60_pac "31 to 60-day readmission rate, discharges to SNF"
+lab var read90_pac "61 to 90-day readmission rate, discharges to SNF"
+lab var samh30_pac "30-day readmission rate to the same hospital, discharges to SNF"
+lab var samh60_pac "31 to 60-day readmission rate to the same hospital, discharges to SNF"
+lab var samh90_pac "61 to 90-day readmission rate to the same hospital, discharges to SNF"
+lab var ses_score "Mean SES score"
+lab var teaching "Teaching"
+lab var urban "Urban"
+lab var own_fp "For profit"
+lab var own_np "Not for profit"
+lab var own_gv "Government owned"
+lab var uncomp1 "Uncompensated care"
+lab var dissh "DSH payment"
+lab var tot_pat_rev "Total patient revenue ($)"
+lab var vi_snf "Formally owns SNF"
+lab var urban "Urban"
+lab var teaching "Teaching"
+lab var own_fp "For profit"
+lab var own_np "Not for profit"
+lab var own_gv "Government owned"
+lab var refhhi "Referral concentration"
+lab var refdensity "Referral density"
+lab var shref "Probability of referring to SNF"
+
+gen lnreqSNF_80pct = ln(reqSNF_80pct)
+lab var lnreqSNF_80pct "Ln # SNFs required to account for 80% referrals"
+gen lnrefdensity = ln(refdensity)
+lab var lnrefdensity "Ln referral density"
+lab var shref_bytopSNF "% referrals accounted for by leading SNF"
 
 compress
-save hosp_fy_VI, replace
+save hosp_fy_VI_agg3c_nosw, replace
 
 
 *-----------------------------

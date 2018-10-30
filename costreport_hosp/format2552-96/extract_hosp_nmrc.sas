@@ -23,6 +23,7 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
        or ( WKSHT_CD EQ "S410000" )
        or ( WKSHT_CD EQ "S200000" )
        or ( WKSHT_CD EQ "G300000" )
+       or ( WKSHT_CD EQ "E00A18A" )
        )
        ;
 
@@ -47,6 +48,9 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
 
            when (WKSHT_CD EQ "S300001" and CLMN_NUM="0100" and LINE_NUM="01200") varname="beds"; *# beds;
            when (WKSHT_CD EQ "S300001" and CLMN_NUM="1500" and LINE_NUM="01200") varname="dischrg"; *# discharges;
+           when (WKSHT_CD EQ "S300001" and CLMN_NUM="1200" and LINE_NUM="01200") varname="ti5_dischrg"; *# discharges for Title V;
+           when (WKSHT_CD EQ "S300001" and CLMN_NUM="1300" and LINE_NUM="01200") varname="mcre_dischrg"; *# discharges for Title XVIII;
+           when (WKSHT_CD EQ "S300001" and CLMN_NUM="1400" and LINE_NUM="01200") varname="mcaid_dischrg"; *# discharges for Title XIX;
 
            * financial;
            when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00100") varname="tot_pat_rev";
@@ -55,6 +59,11 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
            when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="00500") varname="net_pat_inc";
            when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="02500") varname="tot_oth_inc";
            when (WKSHT_CD EQ "G300000" and CLMN_NUM="0100" and LINE_NUM="03000") varname="tot_net_inc";
+
+           when ( WKSHT_CD EQ "E00A18A" and CLMN_NUM="0100" and LINE_NUM="00400") varname="SSIratio"; /* SSI Ratio */
+           when ( WKSHT_CD EQ "E00A18A" and CLMN_NUM="0100" and LINE_NUM="00401") varname="Medicaid_ratio"; /* Medicaid Ratio */
+           when ( WKSHT_CD EQ "E00A18A" and CLMN_NUM="0100" and LINE_NUM="00403") varname="DSHratio";/* DSH Ratio */
+           when ( WKSHT_CD EQ "E00A18A" and CLMN_NUM="0100" and LINE_NUM="00404") varname="DSHadjust";/* DSH adjust */
            otherwise;
              end;
          run;
@@ -66,4 +75,4 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
                run;
      %end;
  %mend;
- %loop(fyear=2007,lyear=2011);
+ %loop(fyear=2000,lyear=2011);

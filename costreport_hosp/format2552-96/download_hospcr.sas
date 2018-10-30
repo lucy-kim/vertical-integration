@@ -13,4 +13,4 @@ x "wget -nv -N http://www.nber.org/hcris/2552-96/hosp_alpha2552_96_&year._long.c
 %end;
 %mend downloadhospcr;
 
-%downloadhospcr(2007,2011);
+%downloadhospcr(2000,2011);

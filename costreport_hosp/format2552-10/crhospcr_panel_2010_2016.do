@@ -51,8 +51,8 @@ foreach v of varlist teaching ltch ltch_part cah req_malprins dissh uncomp1 unco
   rename a `v'
   lab var `v' "=1 if hosp is `v'"
 }
-lab var uncomp1 "=1 if receive uncompensated care payment before 10/1 during the cost reporting period"
-lab var uncomp2 "=1 if receive uncompensated care payment on/after 10/1 during the cost report period"
+lab var uncomp1 "=1 if receive uncompensated care payment before 10/1 during the reporting period"
+lab var uncomp2 "=1 if receive uncompensated care payment on/after 10/1 during the report period"
 lab var ltch_part "=1 if ltch co-located within another hospital during the CR period"
 
 loc v urban
@@ -63,21 +63,11 @@ drop `v'
 rename a `v'
 lab var `v' "=1 if hosp is `v'"
 
-*variable labels
-lab define ll 1 "claim-made" 2 "occurrence", replace
-lab val malprins_policy ll
-lab var malprins_policy "is malpractice insurance claims-made or occurrence policy"
-lab var req_malprins "=1 if hosp legally required to carry malpractice insurance"
-lab var beds "# beds"
-lab var dischrg "# discharges"
-lab var totepi_st "total number of episodes (standard/nonoutlier) in hosp-based HHA"
-lab var totepi_out "otal number of outlier episodes in hosp-based HHA"
-lab var malprins_premium "amount of malpractice insurance premiums"
-lab var malprins_paidloss "amount of malpractice insurance paid losses"
-lab var malprins_selfins "amount of malpractice insurance self insurance"
-lab var cr_start "cost reporting period start"
-lab var cr_end "cost reporting period end"
-lab var dissh "dummy for disproportionate share hospital adjustment"
+*create 0/1 participation indicator for pioneer ACO
+gen pionACO2 = pionACO > 0 & pionACO!=.
+drop pionACO
+rename pionACO2 pionACO
+tab fyear, summarize(pionACO)
 
 *drop variables with mostly missing values
 drop fy_end_dt fy_bgn_dt
@@ -118,17 +108,38 @@ list prov_num fyear  *dt beds disch cr_* if prov_num=="010146" | prov_num=="0113
 *prov_num=="010146"
 
 *keep only the variables i want
-keep prov_num *ccn teaching urban own_* uncomp* dissh *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out fyear cr_*
+keep prov_num *ccn teaching urban own_* uncomp* dissh *rev* *inc* beds *dischrg snfdays swbsnfdays totepi_st totepi_out fyear cr_* SSIratio Medicaid_ratio DSHratio DSHadjust pionACO
 
 *manually correct data for the 3 hospitals
 replace fyear = 2015 if prov_num=="010146" & cr_start==mdy(9,25,2014)
 
-collapse (sum) tot* net* *days dischrg (mean) beds, by(prov_num fyear *ccn own* teaching dissh uncomp* urban)
+collapse (sum) tot* net* *days *dischrg (mean) pionACO beds SSIratio Medicaid_ratio DSHratio DSHadjust, by(prov_num fyear *ccn own* teaching dissh uncomp* urban)
 
 duplicates tag prov_num fyear, gen(dup)
 tab dup
 assert dup==0
 drop dup
+
+*variable labels
+lab define ll 1 "claim-made" 2 "occurrence", replace
+lab val malprins_policy ll
+lab var malprins_policy "is malpractice insurance claims-made or occurrence policy"
+lab var req_malprins "=1 if hosp legally required to carry malpractice insurance"
+lab var beds "# beds"
+lab var dischrg "# discharges"
+lab var totepi_st "total number of episodes (standard/nonoutlier) in hosp-based HHA"
+lab var totepi_out "otal number of outlier episodes in hosp-based HHA"
+lab var malprins_premium "amount of malpractice insurance premiums"
+lab var malprins_paidloss "amount of malpractice insurance paid losses"
+lab var malprins_selfins "amount of malpractice insurance self insurance"
+lab var cr_start "cost reporting period start"
+lab var cr_end "cost reporting period end"
+lab var dissh "dummy for disproportionate share hospital adjustment"
+lab var SSIratio "% SSI recipient pat days to Medicare Part A pat days"
+lab var Medicaid_ratio "% Medicaid pat days to total pat days"
+lab var DSHratio "Allowable DSH %"
+lab var DSHadjust "DSH adjustment"
+lab var pionACO "=1 if participate in Pioneer ACO"
 
 compress
 save hospcr_panel_2010_2016, replace

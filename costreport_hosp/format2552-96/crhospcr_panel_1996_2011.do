@@ -4,7 +4,7 @@ cd /home/hcmg/kunhee/Labor/Bayada_data
 
 *append all years of Cost report data
 clear
-forval y = 2007/2009 {
+forval y = 2000/2009 {
     append using hospcr`y'
 }
 append using hospcr2010_2552_96
@@ -120,7 +120,7 @@ tab dup
 assert dup==0
 drop dup
 
-keep prov_num *ccn teaching urban own_* dissh *rev* *inc* beds dischrg fyear
+keep prov_num *ccn teaching urban own_* dissh *rev* *inc* beds *dischrg fyear SSIratio Medicaid_ratio DSHratio DSHadjust
 
 compress
-save hospcr_panel_2007_2011, replace
+save hospcr_panel_2000_2011, replace
