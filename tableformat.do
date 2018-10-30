@@ -1,7 +1,7 @@
 *reshape coefficient estimate output into a formatted table
-loc gph /ifs/home/kimk13/VI/output
-loc reg /ifs/home/kimk13/VI/output
-loc dta /ifs/home/kimk13/VI/data
+loc gph "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc reg "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data"
 
 cd `dta'/Medicare
 
@@ -9,14 +9,15 @@ loc nn 1
 loc n2 =`nn'*1
 loc k 11
 
-loc fname pbite_noSNF
-*pbite pbite_actual pnltr2013 sppshort
+loc fname pbite
+*pbite_noSNF pbite_actual pnltr2013 sppshort
 
-use ivpenalty_VI_agg3c_nosw, clear
+use ivpenalty_VI_agg3c_nosw2, clear
 
 loc ii = 0
 *shrefAMI shrefHF shrefPN qual_samh qual_star qual_def
-foreach v of varlist shref comorbidsum vi_snf refhhi shref_bytopSNF lnreqSNF_80pct qual_read read30_pac read30_other {
+*foreach v of varlist shref comorbidsum vi_snf refhhi shref_bytopSNF lnreqSNF_80pct qual_read read30_pac read30_other {
+foreach v of varlist shref_bytopSNF vi_snf qual_read refhhi lnreqSNF_80pct shref comorbidsum read30_pac read30_other {
   loc ii = `ii' + 1
   loc yv`ii' `v'
 }

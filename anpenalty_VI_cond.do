@@ -336,6 +336,7 @@ foreach v of varlist `comorbid_other' {
 }
 bys provid: egen momit = max(omit)
 drop if momit
+drop omit momit
 
 compress
 save ivpenalty_VI_cond_nosw, replace

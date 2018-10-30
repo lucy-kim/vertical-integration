@@ -85,7 +85,11 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 ## Additional analyses done separately for each condition
 1. `crhosp_fy_VI_cond.do`
 2. `anSNFquality_cond.do`
-3.
+3. `anpenalty_VI_cond.do`
+
+
+
+
 2. `predict_pnltprs_dynamic.do`
     - create dynamic penalty pressure: in each year t = 2011, 2012, 2013, ..., predict the likelihood of penalty, penalty rate, penalty dollar amount using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 4. `ivpenalty_VI_bycond.do`
