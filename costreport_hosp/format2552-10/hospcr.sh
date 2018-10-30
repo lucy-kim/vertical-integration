@@ -10,14 +10,14 @@ cd /home/hcmg/kunhee/Labor
 # sas -nodms -noterminal download_hospcr.sas
 
 # Read Hospital cost report main, numeric, alphanumeric files
-# sas -nodms -noterminal read_hosp_rpt.sas
-# sas -nodms -noterminal read_hosp_rpt_nmrc.sas
-# sas -nodms -noterminal read_hosp_rpt_alphnmrc.sas
-#
+sas -nodms -noterminal read_hosp_rpt.sas
+sas -nodms -noterminal read_hosp_rpt_nmrc.sas
+sas -nodms -noterminal read_hosp_rpt_alphnmrc.sas
+
 # # Extract some variables from the numeric, alpha file
-# sas -nodms -noterminal extract_hosp_nmrc.sas
-# sas -nodms -noterminal extract_hosp_alpha.sas
-#
+sas -nodms -noterminal extract_hosp_nmrc.sas
+sas -nodms -noterminal extract_hosp_alpha.sas
+
 # # Transpose to wide shape (multiple variables per report number) & merge alphanumeric & numeric data to create Hospital-level data
 sas -nodms -noterminal crhospcr.sas
 #

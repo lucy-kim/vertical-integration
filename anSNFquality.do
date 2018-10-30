@@ -24,35 +24,58 @@ sort pacprovid fy
 gen new = first> 2008
 
 keep if fy==first
-keep pacprovid defcnt new
+keep pacprovid defcnt new zip
 *keep pacprovid defcnt fy firstqual new
 
 tempfile snfqual
 save `snfqual'
 
-use SNFreferral_tchpy.dta, clear
+use SNFreferral_tchpy_nosw.dta, clear
 drop if cond=="HK"
-drop if pacprovid==""
+drop if pacprovid==.
 
 collapse (sum) dischnum_pac read30_pac samh30_pac, by(provid pacprovid fy)
 tempfile ref
 save `ref'
 
+*-----------
+
 *calculate raw readmission rate in 2008 := [#readmissions for all hospitals] / [# referrals from all hospitals]
 use `ref'
 keep if fy==2008
-collapse (sum) dischnum_pac read30_pac samh30_pac, by(pacprovid)
+collapse (sum) dischnum_pac read30_pac , by(pacprovid)
 gen read30_pac_rate = read30_pac/dischnum_pac
-gen samh30_pac_rate = samh30_pac/dischnum_pac
-keep pacprovid read30_pac_rate samh30_pac_rate
+keep pacprovid read30_pac_rate
 tempfile read08
 save `read08'
 
 use `read08', clear
-merge 1:1 pacprovid using `snfqual', keep(3) nogen
+rename pacprovid pacprovid_n
+gen pacprovid = string(pacprovid_n, "%06.0f")
+
+*merge with deficiency counts
+merge 1:1 pacprovid using `snfqual', nogen
 gen lndefcnt = log(defcnt+1)
 
+*merge with 5-star rating: '10'='*', '50'='*****'
+merge 1:1 pacprovid using `dta'/Medicare/snf-compare/ratings2009, keep(1 3) nogen
+
+tempfile tmp_qual
+save `tmp_qual'
+
+*-------------------------
 *at the SNF's HRR level, standardize score of the SNF quality
+
+*get HRR for each SNF
+loc file `dta'/dartmouth/ZipHsaHrr14
+insheet using `file'.csv, comma names clear
+rename zip zipcode
+tempfile zip_hrr
+save `zip_hrr'
+
+use `tmp_qual', clear
+merge m:1 zipcode using `zip_hrr', keepusing(hrrnum) keep(1 3)
+
 preserve
 use snf_hrr_xwalk, clear
 collapse (min) hrrnum, by(pacprovid)
@@ -61,31 +84,66 @@ tempfile hrr_snf
 save `hrr_snf'
 restore
 
-merge 1:1 pacprovid using `hrr_snf', keep(3) nogen
+preserve
+keep if _m==1
+drop hrrnum
+merge 1:1 pacprovid using `hrr_snf', keep(1 3) nogen
+tempfile m1
+save `m1'
+restore
 
-foreach v of varlist read30_pac_rate samh30_pac_rate lndefcnt {
+drop if _m==1
+append using `m1'
+drop _m
+count if hrrnum==.
+tab pacprovid if hrrnum==.
+tab zip if hrrnum==.
+
+foreach v of varlist read30_pac_rate lndefcnt {
   replace `v' = -1 * `v'
 }
-foreach v of varlist read30_pac_rate samh30_pac_rate lndefcnt {
+
+foreach v of varlist read30_pac_rate lndefcnt {
   capture drop mean sd
   bys hrrnum: egen mean = mean(`v')
   bys hrrnum: egen sd = sd(`v')
   gen std_`v' = (`v'-mean)/sd
 }
+drop if hrrnum==.
+*27 SNF dropped
 
-keep std_* pacprovid read30_pac_rate samh30_pac_rate lndefcnt defcnt new
+*SNF level quality data
+keep std_* pacprovid read30_pac_rate lndefcnt defcnt new overall_rating hrrnum
 
-merge 1:m pacprovid using `ref'
+*drop providers containing alphabet
+gen x = real(pacprovid)
+drop if x==.
+drop x
+destring pacprovid, replace
 
-/* *merge m:1 pacprovid using `snfqual', keep(1 3)
-*47K have unmatched
-*sort pacprovid fy provid
-*list in 1/10
-merge m:1 pacprovid using `snfqual', keep(1 3) nogen
-gen lndefcnt = log(defcnt+1)
-*764 unmatched SNFs - ignore them and they will drop out
+merge 1:m pacprovid using `ref', keep(2 3) nogen
 
-merge m:1 pacprovid using `read08', keep(1 3) nogen */
+*get hospital-specific SNF quality measured by return to the same hospital
+preserve
+keep if fy==2008
+duplicates tag pacprovid provid, gen(dup)
+assert dup==0
+gen samh30_pac_rate = samh30_pac/dischnum_pac
+
+*standardize within the hospital
+loc v samh30_pac_rate
+replace `v' = -1 * `v'
+capture drop mean sd
+bys provid: egen mean = mean(`v')
+bys provid: egen sd = sd(`v')
+gen std_`v' = (`v'-mean)/sd
+
+keep provid pacprovid samh30_pac_rate std_samh30_pac_rate
+tempfile samh30_pac_rate
+save `samh30_pac_rate'
+restore
+
+merge m:1 provid pacprovid using `samh30_pac_rate', nogen
 
 *create share of referrals from each hospital to each SNF
 bys provid fy: egen totref = sum(dischnum_pac)
@@ -97,76 +155,72 @@ gen wgt_def = std_lndef * reffrac
 gen wgt_def2 = std_lndef * reffrac if new==0
 gen wgt_read = std_read30 * reffrac
 gen wgt_samh = std_samh30 * reffrac
+gen wgt_star = overall_rating * reffrac
 
-collapse (sum) qual_def = wgt_def qual_def_old = wgt_def2 qual_read = wgt_read qual_samh = wgt_samh (mean) defcnt, by(provid fy)
-
-compress
-save qualindex, replace
-
-*--------------------------------
-* regress the performance index on the HRRP X Post
-
-use ivpenalty_VI_agg3c, clear
-
-merge 1:1 provid fy using qualindex, keep(1 3) nogen
-lab var qualindex "SNF low-performance index"
-
-loc file1 ols_spp_pv_qual
-loc file2 ols_spp_ci_qual
-forval sn = 1/2 {
-  capture erase `reg'/`file`sn''.xls
-  capture erase `reg'/`file`sn''.txt
-}
-loc stat1 pv
-loc stat2 ci
-
-
-loc int 2011
-loc pnltprs1 sppXpost`int'
-loc comorbid metacancer_ct-hipfracture_ct
-loc reform EHRstage1 EHRstage2 vbp_adjf HACstatus
-loc sp _Ify_* own_* urban teaching _Isize* lnnsnf_mkt_samehrr black white `comorbid' `reform'
-
-forval sn = 1/2 {
-  foreach yv of varlist qualindex {
-
-    loc out "outreg2 using `reg'/`file`sn''.xls, append label ctitle(`l`yv'') `stat`sn''"
-
-    forval n = 1/1 {
-      xtreg `yv' `pnltprs`n'' `sp' vi_snf_l , cluster(provid) fe
-
-      *mean dep var
-      sum `yv' if e(sample)
-      loc mdv: display %9.3f `r(mean)'
-
-      `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
-    }
-  }
-}
-
-*-------------
-*for all the outcomes, when using the specification with interaction with year dummies, let's just plot the coefficients
-loc pnltprs2 sppX20*
-
-foreach yv of varlist qualindex {
-  loc n 2
-    xtreg `yv' `pnltprs`n'' `sp' vi_snf_l, fe cluster(provid)
-  tempfile `yv'
-  parmest,format(estimate min95 max95 %8.4f p %8.3f) saving(``yv'', replace)
-}
-
-use `qualindex', clear
-gen gp = "qualindex"
-assert gp!=""
-keep if regexm(parm, "spp")
-gen year = substr(parm, -4,4)
-tab gp
-drop dof t
+collapse (sum) qual_def = wgt_def qual_def_old = wgt_def2 qual_read = wgt_read qual_samh = wgt_samh qual_star = wgt_star (mean) defcnt, by(provid fy)
 
 compress
-outsheet using `reg'/coef_DiD_static_quality.csv, replace names comma
+save qualindex_nosw, replace
+
+*-----------
+*how many hospitals were paired with a SNF
+use `ref', clear
+keep if fy==2008
+assert dischnum_pac !=.
+keep if dischnum_pac > 0
+
+preserve
+sort pacprovid provid
+gen i = 1
+collapse (sum) nhosp_paired=i, by(pacprovid)
+gen onlyoneHosp = nhosp_paired==1
+tempfile snf
+save `snf'
+restore
+
+merge m:1 pacprovid using `snf', nogen
+
+*# referrals in each hospital-SNF pair
+bys onlyoneHosp: egen totreferral = sum(dischnum_pac)
+* 23155 /130612 = 17.7% = total % referrals
+
+*create share of referrals from each hospital to each SNF
+bys provid fy: egen totref = sum(dischnum_pac)
+gen reffrac = dischnum_pac/totref
+
+*calculate SNF's readmission rate from all hospitals
+preserve
+collapse (sum) dischnum_pac read30_pac, by(pacprovid)
+gen readmit_snf = read30_pac/dischnum_pac
+keep pacprovid readmit_snf
+tempfile snf_read
+save `snf_read'
+restore
+
+merge m:1 pacprovid using `snf_read', nogen
+
+hist dischnum_pac if only==1, frac xtitle(# referrals) subti(SNFs that received referrals from only one hospital)
+graph export `reg'/dischnum_pac_onlyonehosp.eps, replace
 
 
+hist reffrac if only==1, frac xtitle(Fraction of hospital's referrals) subti(SNFs that received referrals from only one hospital)
+graph export `reg'/reffrac_onlyonehosp.eps, replace
+
+hist reffrac if only==0, frac xtitle(Fraction of hospital's referrals) subti(SNFs that received referrals from multiple hospitals)
+graph export `reg'/reffrac_multihosp.eps, replace
+
+
+hist readmit_snf if only==1, frac xtitle(SNF's readmission rate from all hospitals) subti(SNFs that received referrals from only one hospital)
+graph export `reg'/readmit_snf_onlyonehosp.eps, replace
+
+hist readmit_snf if only==0, frac xtitle(SNF's readmission rate from all hospitals) subti(SNFs that received referrals from multiple hospitals)
+graph export `reg'/readmit_snf_multihosp.eps, replace
+
+
+preserve
+sum dischnum_pac
+tab dischnum_pac
+restore
 *------------------------------
 
 /* *run regression at the SNF-hospital level

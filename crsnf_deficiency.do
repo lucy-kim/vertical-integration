@@ -25,7 +25,7 @@ forval y=2007/2011 {
   *CURHDEF = Total number of health deficiencies on current survey
   *CURLDEF = Total number of life safety code defs on current survey
   assert CURHDEF+CURLDEF==DEFNUM
-  keep PROVNUM PROVNUM CURHDEF
+  keep PROVNUM PROVNUM CURHDEF ZIP
 
   *use CURHDEF (health deficiencies) because they're reported in later years too
   renvars PROVNUM CURHDEF \ provid defcnt
@@ -65,7 +65,7 @@ drop if nn > 1 & SURVEY > smaller
 *CURHDEF = Total number of health deficiencies on current survey
 *CURLDEF = Total number of life safety code defs on current survey
 assert CURHDEF+CURLDEF==DEFNUM
-keep PROVNUM PROVNUM CURHDEF
+keep PROVNUM PROVNUM CURHDEF ZIP
 
 *use CURHDEF (health deficiencies) because they're reported in later years too
 renvars PROVNUM CURHDEF \ provid defcnt
@@ -99,7 +99,7 @@ forval y = 2013/2016 {
   capture keep if filedate=="`y'-01-01"
   *assert cycle_1_nfromdefs+ cycle_1_nfromcomp==cycle_1_defs
 
-  keep provnum cycle_1_nfromdefs
+  keep provnum cycle_1_nfromdefs zip
   renvars provnum cycle_1_nfromdefs \ provid defcnt
 
   *gen x =real(provid)
@@ -122,8 +122,13 @@ clear
 forval y = 2007/2016 {
   append using `snfqual`y''
 }
+destring ZIP, replace
+gen zipcode = ZIP if ZIP!=.
+replace zipcode = zip if zip!=.
+assert zipcode!=.
+
 tab yr
-keep provid yr defcnt
+keep provid yr defcnt zipcode
 
 renvars provid yr \ pacprovid fy
 

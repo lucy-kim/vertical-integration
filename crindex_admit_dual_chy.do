@@ -2,10 +2,10 @@
 
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare/corrected-hosplevel/5.dual_counts
+cd `dta'/Medicare/corrected-hosplevel/5-31/dual_counts_May_31
 
 foreach d in "mi" "hf" "pn" "hk" {
-  loc f `d'_dual_counts_May_30.csv
+  loc f `d'_dual_counts_May_31st.csv
   insheet using `f', comma names clear
   de
 
@@ -45,15 +45,15 @@ foreach d in "mi" "hf" "pn" "hk" {
 }
 
 compress
-save  `dta'/Medicare/index_admit_dual_chm, replace
+save  `dta'/Medicare/index_admit_dual_chm_nosw, replace
 
 *----------
 
-use `dta'/Medicare/index_admit_dual_chm, clear
+use `dta'/Medicare/index_admit_dual_chm_nosw, clear
 collapse (sum) snf_dual index_dual snf_count, by(cond provid fy)
 
 compress
-save  `dta'/Medicare/index_admit_dual_chy, replace
+save  `dta'/Medicare/index_admit_dual_chy_nosw, replace
 
 
 *---------------------

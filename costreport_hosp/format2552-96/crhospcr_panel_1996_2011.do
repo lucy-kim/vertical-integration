@@ -120,7 +120,7 @@ tab dup
 assert dup==0
 drop dup
 
-keep prov_num *ccn teaching urban own_* dissh *rev* *inc* beds dischrg fyear SSIratio Medicaid_ratio DSHratio DSHadjust
+keep prov_num *ccn teaching urban own_* dissh *rev* *inc* beds *dischrg fyear SSIratio Medicaid_ratio DSHratio DSHadjust
 
 compress
 save hospcr_panel_2000_2011, replace

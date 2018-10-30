@@ -51,6 +51,9 @@ libname out "/home/hcmg/kunhee/Labor/Bayada_data";
 
         when (WKSHT_CD EQ "S300001" and CLMN_NUM="0020" and LINE_NUM="01400") varname="beds"; *# beds;
         when (WKSHT_CD EQ "S300001" and CLMN_NUM="0150" and LINE_NUM="01400") varname="dischrg"; *# discharges;
+        when (WKSHT_CD EQ "S300001" and CLMN_NUM="0120" and LINE_NUM="01400") varname="ti5_dischrg"; *# discharges for Title V;
+        when (WKSHT_CD EQ "S300001" and CLMN_NUM="0130" and LINE_NUM="01400") varname="mcre_dischrg"; *# discharges for Title XVIII;
+        when (WKSHT_CD EQ "S300001" and CLMN_NUM="0140" and LINE_NUM="01400") varname="mcaid_dischrg"; *# discharges for Title XIX;
 
         when (WKSHT_CD EQ "S410000" and CLMN_NUM="0050" and LINE_NUM="03600") varname="totepi_st"; *total number of episodes (standard/nonoutlier) in hosp-based HHA;
         when (WKSHT_CD EQ "S410000" and CLMN_NUM="0050" and LINE_NUM="03700") varname="totepi_out"; *total number of outlier episodes in hosp-based HHA;

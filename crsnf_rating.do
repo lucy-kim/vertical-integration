@@ -7,8 +7,18 @@ loc dta /ifs/home/kimk13/VI/data
 cd `dta'/Medicare/snf-compare
 
 import excel using ratings2009.xlsx, firstrow clear
+sum year month
+keep if month==1
 
-keep provnum overall_rating year month
+keep PROVNUM *rating
 duplicates drop
 
-collapse (mean) overall_rating, by(provnum)
+rename PROVNUM pacprovid
+
+*drop '70' = 'Too New to Rate', '90' = 'Data Not available'
+drop if overall_rating=="70" | overall_rating=="90"
+
+destring *rating, replace
+
+compress
+save ratings2009, replace

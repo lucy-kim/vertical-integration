@@ -2,23 +2,23 @@
 
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare/corrected-hosplevel/results_index_snf_counts_May_25
+cd `dta'/Medicare/corrected-hosplevel/5-31
 
 *for SNF
-loc f "3.match_freq_SNF_May_30.csv"
+loc f "3.match_freq_SNF_May_31st.csv"
 insheet using `f', comma names clear
 rename provider pacprovid
 
-*PAC provider # is not numeric, contains alphabet - destring
-/* gen x = real(pacprovid)
+/* *PAC provider # is not numeric, contains alphabet - destring
+gen x = real(pacprovid)
 gen l = length(pacprovid)
 assert l==6
 gen alpha = substr(pacprovid,3,1)
 tab alpha
 drop if x==.
 drop l x alpha
-destring pacprovid, replace
-*/
+destring pacprovid, replace */
+
 *U W Y Z "?"
 *CCN containing "Z" :  Swing-Bed Designation for Critical Access Hospitals  https://www.cms.gov/Regulations-and-Guidance/Guidance/Transmittals/downloads/R29SOMA.pdf
 
@@ -91,13 +91,13 @@ keep if last4 >= 5000 & last4 <= 6499
 drop sid last4 */
 
 compress
-save `dta'/Medicare/SNFreferral_tchpm, replace
+save `dta'/Medicare/SNFreferral_tchpm_nosw, replace
 
 *-------------------
 *aggregate up to the year level
-use `dta'/Medicare/SNFreferral_tchpm, clear
+use `dta'/Medicare/SNFreferral_tchpm_nosw, clear
 
 collapse (sum) dischnum_pac-black_pac, by(cond provid pacprovid fy)
 
 compress
-save `dta'/Medicare/SNFreferral_tchpy, replace
+save `dta'/Medicare/SNFreferral_tchpy_nosw, replace

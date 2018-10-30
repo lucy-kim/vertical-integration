@@ -108,12 +108,12 @@ list prov_num fyear  *dt beds disch cr_* if prov_num=="010146" | prov_num=="0113
 *prov_num=="010146"
 
 *keep only the variables i want
-keep prov_num *ccn teaching urban own_* uncomp* dissh *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out fyear cr_* SSIratio Medicaid_ratio DSHratio DSHadjust pionACO
+keep prov_num *ccn teaching urban own_* uncomp* dissh *rev* *inc* beds *dischrg snfdays swbsnfdays totepi_st totepi_out fyear cr_* SSIratio Medicaid_ratio DSHratio DSHadjust pionACO
 
 *manually correct data for the 3 hospitals
 replace fyear = 2015 if prov_num=="010146" & cr_start==mdy(9,25,2014)
 
-collapse (sum) tot* net* *days dischrg (mean) pionACO beds SSIratio Medicaid_ratio DSHratio DSHadjust, by(prov_num fyear *ccn own* teaching dissh uncomp* urban)
+collapse (sum) tot* net* *days *dischrg (mean) pionACO beds SSIratio Medicaid_ratio DSHratio DSHadjust, by(prov_num fyear *ccn own* teaching dissh uncomp* urban)
 
 duplicates tag prov_num fyear, gen(dup)
 tab dup

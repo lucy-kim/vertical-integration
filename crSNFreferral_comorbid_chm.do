@@ -4,10 +4,10 @@
 
 loc dta /ifs/home/kimk13/VI/data
 
-cd `dta'/Medicare/corrected-hosplevel/4.Comorbidities_SNF
+cd `dta'/Medicare/corrected-hosplevel/5-31/dual_com_may_31
 
 foreach d in "MI" "HF" "PN" "hk" {
-  loc f `d'_comorbidity_May_30th_SNF.csv
+  loc f `d'_comorbidity_May_31st_SNF.csv
   insheet using `f', comma names clear
   de
 
@@ -32,11 +32,11 @@ foreach d in "MI" "HF" "PN" "hk" {
 }
 
 compress
-save `dta'/Medicare/SNFreferral_comorbid_chm, replace
+save `dta'/Medicare/SNFreferral_comorbid_chm_nosw, replace
 
 *---------------------
 *aggregate up to the year level
-use `dta'/Medicare/SNFreferral_comorbid_chm, clear
+use `dta'/Medicare/SNFreferral_comorbid_chm_nosw, clear
 
 *create quarters using months
 gen qtr = .
@@ -56,4 +56,4 @@ tab fy
 collapse (sum) metacancer-hipfracture_ct, by(cond provid fy)
 
 compress
-save `dta'/Medicare/SNFreferral_comorbid_chy, replace
+save `dta'/Medicare/SNFreferral_comorbid_chy_nosw, replace

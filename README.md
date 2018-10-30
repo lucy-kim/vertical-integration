@@ -49,7 +49,11 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - create SNF quality (deficiency counts) data from the SNF Compare archive database
 1. `crsnf_rating.do`
   - create SNF quality (rating) data from the SNF Compare archive database
-
+1. `agebins.do`
+  - create index admission-level and SNF-level data on the # patients in each 5-age bin
+4. `crindex_admit_DRG_chm.do`
+  - Create hospital-FY-condition-DRG level index admissions data
+  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
 
 ## Programs to obtain and clean data for hospital participation in other pay for performance programs
 1. `crhosp_bpci_participant.do`
@@ -64,7 +68,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 
 ## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration
 2. `predict_pnltprs.do`
-  - in each year t = 2011, 2012, 2013, ..., predict the likelihood of penalty, penalty rate, penalty dollar amount using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
+  - in each year t = 2011, predict the likelihood of penalty, penalty rate, penalty dollar amount in t+2 using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 3. `crhosp_fy_VI.do`
   - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
   - hospital characteristics from Hospital cost reports data
@@ -75,8 +79,15 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - reshape coefficient estimate output into a formatted table
 1. `desc_trend_VI.do`
   - descriptive analysis of the trend of vertical integration over time
+1. `robustcheck.do`
+  - robustness check analysis
 
-
+## Additional analyses done separately for each condition
+1. `crhosp_fy_VI_cond.do`
+2. `anSNFquality_cond.do`
+3.
+2. `predict_pnltprs_dynamic.do`
+    - create dynamic penalty pressure: in each year t = 2011, 2012, 2013, ..., predict the likelihood of penalty, penalty rate, penalty dollar amount using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 4. `ivpenalty_VI_bycond.do`
 5. `andynamicpp_VI_agg3c.do`
   - analyze the impact of dynamic penalty pressure on the integration outcome
@@ -93,13 +104,11 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 
   2. `desc_trend_VI2.do` - drop
 
-## Misc. files not to be used for final analysis
+## Misc. files _not_ to be used for final analysis
 3. `crpenalty_VI_bycond.do`
 1. `anpenalty_VI_bycond.do`
 3. `anpenalty_VI_tripleDD.do`
-4. `crindex_admit_DRG_chm.do`
-  - Create hospital-FY-condition-DRG level index admissions data
-  - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
+
 5. `crinpat_pmt_hosp_fy_drg.do`
   - Create hospital-FY-condition level data on Medicare inpatient payment by combining the DRG-level counts from our internal Medicare data with the public DRG-level average payment payment data from CMS
 1. `crVI_hospsmpl.do` - skip

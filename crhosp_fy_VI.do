@@ -5,7 +5,7 @@ loc dta /ifs/home/kimk13/VI/data
 cd `dta'/Medicare
 
 *construct the referral HHI lumping all 3 conditions: AMI, HF, PN
-use SNFreferral_tchpy.dta, clear
+use SNFreferral_tchpy_nosw.dta, clear
 drop if cond=="HK"
 assert dischnum_pac==0 if pacprovid==.
 
@@ -104,7 +104,7 @@ rename provider provid
 *----------------
 *merge with dual-eligibility count data
 preserve
-use index_admit_dual_chy, clear
+use index_admit_dual_chy_nosw, clear
 drop if cond=="HK"
 collapse (sum) *_dual snf_count, by(provid fy)
 tempfile index_admit_dual_chy
@@ -138,7 +138,7 @@ merge 1:1 provid fy using `index_admit_comorbid_chy', keep(1 3) nogen
 *----------------
 *merge with comorbidity count data among SNF-referred patients
 preserve
-use SNFreferral_comorbid_chy, clear
+use SNFreferral_comorbid_chy_nosw, clear
 drop if cond=="HK"
 collapse (sum) metaca-hipfrac, by(provid fy)
 foreach v of varlist metaca-hipfrac {
@@ -240,16 +240,7 @@ bys provid: egen zeroadmit = max(x)
 drop if zeroadmit==1
 drop x zeroadmit
 
-tab fy if shref >1
-tab provid if shref > 1
-tab fy if shref > 1 & provid==70040
-list provid fy dischnum* if shref > 1 & provid==70040
-count if shref > 1
-
-gen x = shref > 1
-bys provid: egen bad = max(x)
-drop if bad==1
-drop x bad
+assert shref >=0 & shref <=1
 
 *drop Maryland hospitals
 gen str6 provid_str = string(provid, "%06.0f")
@@ -341,6 +332,14 @@ replace HACstatus = 0 if _m==1
 assert HACstatus!=.
 drop _m HACscore
 
+*BPCI
+gen CCN =string(provid, "%06.0f")
+merge m:1 CCN fy using BPCI/hosp_bpci_participant, keep(1 3)
+tab fy if _m==1
+replace bpci = 0 if _m==1
+assert bpci!=.
+drop _m
+
 *ACO
 capture drop pionACO
 merge m:1 provid fy using ../costreport/hosp_chars_cr, keep(1 3) keepusing(pionACO)
@@ -393,7 +392,7 @@ lab var lnrefdensity "Ln referral density"
 lab var shref_bytopSNF "% referrals accounted for by leading SNF"
 
 compress
-save hosp_fy_VI_agg3c, replace
+save hosp_fy_VI_agg3c_nosw, replace
 
 
 *-----------------------------

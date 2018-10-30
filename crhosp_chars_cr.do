@@ -35,7 +35,7 @@ drop urban
 rename x_urban urban
 
 *use fyear as the year basis
-collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) *rev* *inc* beds dischrg snfdays swbsnfdays totepi_st totepi_out  SSIratio Medicaid_ratio DSHratio DSHadjust pionACO, by(prov_num fyear)
+collapse (max) vi_* teaching urban own_* uncomp* dissh (mean) *rev* *inc* beds *dischrg snfdays swbsnfdays totepi_st totepi_out SSIratio Medicaid_ratio DSHratio DSHadjust pionACO, by(prov_num fyear)
 
 destring prov_num, gen(provid)
 drop prov_num
@@ -64,6 +64,9 @@ replace size = . if beds==.
 *variable labels
 lab var beds "# beds"
 lab var dischrg "# discharges"
+lab var mcre_dischrg "# Medicare discharges"
+lab var mcaid_dischrg "# Medicaid discharges"
+lab var ti5_dischrg "# Title V discharges"
 lab var totepi_st "total number of episodes (standard/nonoutlier) in hosp-based HHA"
 lab var totepi_out "otal number of outlier episodes in hosp-based HHA"
 lab var dissh "dummy for disproportionate share hospital adjustment"
@@ -75,3 +78,5 @@ lab var pionACO "=1 if participate in Pioneer ACO"
 
 compress
 saveold hosp_chars_cr, replace
+
+outsheet using hosp_chars_cr.csv, comma names replace
