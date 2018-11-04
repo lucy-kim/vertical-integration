@@ -327,7 +327,6 @@ sum EHRstage2 if fy > 2013
 sum vbp_adjf if fy > 2012
 sum HACstatus if fy > 2014
 sum bpci if fy > 2013
-sum vbp_adjf if fy >= 2013
 
 *get condition-specific # discharges
 preserve
