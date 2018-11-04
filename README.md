@@ -81,6 +81,8 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - descriptive analysis of the trend of vertical integration over time
 1. `robustcheck.do`
   - robustness check analysis
+1. `DiD_penalty_VI.Rmd`
+  - create figures
 
 ## Additional analyses done separately for each condition
 1. `crhosp_fy_VI_cond.do`
@@ -90,7 +92,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 
 
 
-2. `predict_pnltprs_dynamic.do`
+<!-- 2. `predict_pnltprs_dynamic.do`
     - create dynamic penalty pressure: in each year t = 2011, 2012, 2013, ..., predict the likelihood of penalty, penalty rate, penalty dollar amount using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 4. `ivpenalty_VI_bycond.do`
 5. `andynamicpp_VI_agg3c.do`
@@ -98,9 +100,9 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 6. `dpm.do`
   - dynamic panel data model estimation: analyze the impact of dynamic penalty pressure on the integration outcome with a lagged outcome as a regressor
 1. `persistence.do`
-  - persistence of penalty pressure and integration within a hospital
+  - persistence of penalty pressure and integration within a hospital -->
 
-## diagnostic files
+<!-- ## diagnostic files
 1. `analyze_2012dip.do`
   - why is there a dip in probability of referral in Jan 2011-May 2012?
 
@@ -118,4 +120,4 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 1. `crVI_hospsmpl.do` - skip
 2. `crpenalty_VI_agg3c.do` - skip
 7. `crpac_mkt_hhi.do` - drop ?
-  - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI)
+  - Create PAC market concentration (HHI) at the hospital HRR / HSA level using the referral data created from the Medicare claims data (exclude the hospitals' own referrals when calculating the HHI) -->

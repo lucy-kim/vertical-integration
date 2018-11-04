@@ -381,19 +381,8 @@ foreach v of varlist qual_read qual_def qual_def_old qual_star {
 
 gen closeSNF = 1-vi_snf
 
-*restrict to hospitals included in the condition-specific analysis
-preserve
-use ivpenalty_VI_cond_nosw, clear
-keep provid
-duplicates drop
-tempfile hosplist
-save `hosplist'
-restore
-
-merge m:1 provid using `hosplist', keep(3) nogen
-
 compress
-save ivpenalty_VI_agg3c_nosw2, replace
+save ivpenalty_VI_agg3c_nosw, replace
 
 
 *--------------------------
@@ -417,7 +406,7 @@ loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
 *for now use hosp-comorbidities
 loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
 *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
 *omitted group = _65_74
 loc ages_snf _75_84_pac_sh _85_94_pac_sh _95p_pac_sh
 loc ages_hosp _75_84_sh _85_94_sh _95p_sh
@@ -429,7 +418,7 @@ loc sp_snf _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `como
 loc pnltprs2 sppXpost`int' sppX2010 sppXpost11trend
 loc pnltprs3 sppX20*
 
-use ivpenalty_VI_agg3c_nosw2, clear
+use ivpenalty_VI_agg3c_nosw, clear
 
 loc wgt [aw=dischnum1]
 

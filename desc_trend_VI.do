@@ -1,8 +1,8 @@
 *descriptive analysis of the trend in vertical integration over time
 
 set matsize 11000
-loc reg /ifs/home/kimk13/VI/output
-loc dta /ifs/home/kimk13/VI/data
+loc reg "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data"
 
 cd `dta'/Medicare
 
@@ -93,7 +93,7 @@ loc pnltprs3 sppX20*
 loc comorbid_hosp index_dual metacancer_ct-hipfracture_ct
 *for now use hosp-comorbidities
 *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
 loc sp_hosp _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr black white `comorbid_hosp'
 loc sp_snf _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr black white `comorbid_snf'
 
@@ -199,15 +199,17 @@ lab var lnnsnf_mkt_samehrr "Log number of SNFs in the same HRR"
 lab var index_dual_rate "Share of dual-eligible discharges"
 lab var snf_dual_rate "Share of dual-eligible SNF referrals"
 
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
 loc hospchar small medium big own_np own_fp own_gv teaching urban black_pac black_other white_pac white_other snf_dual_rate dual_other _65_74_pac_sh _65_74_other_sh _75_84_pac_sh _75_84_other_sh _85_94_pac_sh _85_94_other_sh _95p_pac_sh _95p_other_sh `reform'
 loc hospchar2 dischnum dischnumAMI dischnumHF dischnumPN shref shrefAMI shrefHF shrefPN `hospchar' nsnf_samehrr
 loc outcome shref comorbidsum vi_snf refhhi shref_bytopSNF reqSNF_80pct lnreqSNF_80pct qual_read read30_pac read30_other
 
 foreach v of varlist mcre_bite shref shrefAMI shrefHF shrefPN shref_bytopSNF read30_pac read30_other `hospchar' {
-  replace `v' = `v'*100
-  di "`v'"
-  assert `v' >= 0 & `v' <= 100 if `v'!=.
+  if "`v'"!="vbp_adjf" {
+    replace `v' = `v'*100
+    di "`v'"
+    assert `v' >= 0 & `v' <= 100 if `v'!=.
+  }
 }
 
 preserve
@@ -221,7 +223,7 @@ sum comorbidsum if bad==0
 sum vi_snf if vi_snf2008==0 & bad==0
 sum refhhi shref_bytopSNF reqSNF_80pct lnreqSNF_80pct qual_read read30_pac if bad==0
 sum read30_other
-
+sum vbp_adjf if fy >= 2013
 
 preserve
 keep `outcome'
@@ -325,6 +327,7 @@ sum EHRstage2 if fy > 2013
 sum vbp_adjf if fy > 2012
 sum HACstatus if fy > 2014
 sum bpci if fy > 2013
+sum vbp_adjf if fy >= 2013
 
 *get condition-specific # discharges
 preserve

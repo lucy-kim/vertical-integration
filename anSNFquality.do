@@ -2,8 +2,8 @@
 
 set maxvar 20000
 set matsize 11000
-loc reg /ifs/home/kimk13/VI/output
-loc dta /ifs/home/kimk13/VI/data
+loc reg "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data"
 
 cd `dta'/Medicare
 

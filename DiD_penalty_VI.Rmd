@@ -524,10 +524,9 @@ df <- read.csv("~/Dropbox/Research/VI/data/DIDest/coef_DiD_static_refoutc.csv")
 pd <- position_dodge(0.3) # move them .05 to the left and right
 
 table(df$gp) 
-df$gp <- factor(df$gp, levels=c("shref","comorbidsum","vi_snf","refhhi3","shref_bytopSNF","lnreqSNF_80pct","qual_read","read30_pac", "read30_other"), labels = c("A. Discharges referred to SNF, %","B. Average comorbidity count per SNF referred patient","C. Probability of acquiring SNF","D. SNF referral HHI","E. Share of referrals to hospital's most referred SNF, %","F. Log Number of SNFs accounting for 80% of referrals","G. Average SNF performance at baseline", "H. Readmission rate (%), patients referred to SNF", "I. Readmission rate (%), all other patients"))
-
-# df$gp <- factor(df$gp, levels=c("shref","comorbidsum","vi_snf","refhhi3","shref_bytopSNF","lnreqSNF_80pct","qual_read"), labels = c("A. Discharges referred to SNF, %","B. Average comorbidity count per SNF referred patient","C. Probability of acquiring SNF","D. SNF referral HHI","E. Share of referrals to hospital's most referred SNF, %","F. Log Number of SNFs accounting for 80% of referrals","G. Average SNF performance at baseline"))
-
+df$gp <- factor(df$gp, levels=c("shref_bytopSNF", "vi_snf", "qual_read", "refhhi3", "lnreqSNF_80pct", "shref","comorbidsum", "read30_pac", "read30_other"), labels = c( "A. Share of referrals to hospital's most referred SNF, %",  "B. Probability of acquiring SNF","C. Average SNF performance at baseline","D. SNF referral HHI", "E. Log Number of SNFs accounting for 80% of referrals", "F. Discharges referred to SNF, %","G. Average comorbidity count per SNF referred patient", "H. Readmission rate (%), patients referred to SNF", "I. Readmission rate (%), all other patients" ))
+                                
+# df$gp <- factor(df$gp, levels=c("shref","comorbidsum","vi_snf","refhhi3","shref_bytopSNF","lnreqSNF_80pct","qual_read","read30_pac", "read30_other"), labels = c("A. Discharges referred to SNF, %","B. Average comorbidity count per SNF referred patient","C. Probability of acquiring SNF","D. SNF referral HHI","E. Share of referrals to hospital's most referred SNF, %","F. Log Number of SNFs accounting for 80% of referrals","G. Average SNF performance at baseline", "H. Readmission rate (%), patients referred to SNF", "I. Readmission rate (%), all other patients"))
 
 range <- range(-20,0)
 yrrange2 <- range(2010, 2016)

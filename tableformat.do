@@ -12,7 +12,7 @@ loc k 11
 loc fname pbite
 *pbite_noSNF pbite_actual pnltr2013 sppshort
 
-use ivpenalty_VI_agg3c_nosw2, clear
+use ivpenalty_VI_agg3c_nosw, clear
 
 loc ii = 0
 *shrefAMI shrefHF shrefPN qual_samh qual_star qual_def

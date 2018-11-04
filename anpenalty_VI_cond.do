@@ -365,7 +365,8 @@ loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
 *for now use hosp-comorbidities
 loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
 *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
+*vbp_adjf
 *omitted group = _65_74
 loc ages_snf _75_84_pac_sh _85_94_pac_sh _95p_pac_sh
 loc ages_hosp _75_84_sh _85_94_sh _95p_sh
