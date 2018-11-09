@@ -161,7 +161,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
 
   foreach v of varlist * {
     destring `v', ig("()") replace
-    format `v' %9.2f
+    format `v' %9.3f
   }
   xpose, clear varname
 

@@ -419,7 +419,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
     *--------------------
     loc yv vi_snf
@@ -429,7 +429,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
     *--------------------
     loc yv qual_read
@@ -441,7 +441,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
     *--------------------
     foreach yv of varlist refhhi lnreqSNF_80pct {
       *qual_samh qual_star qual_def
@@ -452,7 +452,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
       sum `yv' if e(sample)
       loc mdv: display %9.3f `r(mean)'
 
-      `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+      `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
     }
     *--------------------
     loc yv shref
@@ -463,7 +463,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
     *--------------------
     loc yv comorbidsum
@@ -473,7 +473,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
     *--------------------
     loc yv read30_pac
@@ -483,7 +483,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 
     *--------------------
     loc yv read30_other
@@ -493,7 +493,7 @@ foreach c in "AMI" "HF" "PN" "HK" {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(2) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
   }
 }
 

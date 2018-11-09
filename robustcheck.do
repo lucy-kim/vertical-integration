@@ -4,9 +4,9 @@
 *3) shorten the post-intervention period to one year after the HRRP program
 *4) estimate the penalty pressure interacted with each year dummy
 
-loc gph /ifs/home/kimk13/VI/output
-loc reg /ifs/home/kimk13/VI/output
-loc dta /ifs/home/kimk13/VI/data
+loc gph "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc reg "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data"
 loc int 2011
 
 cd `dta'/Medicare
@@ -16,7 +16,7 @@ loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
 *for now use hosp-comorbidities
 loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
 *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
 *omitted group = _65_74
 loc ages_snf _75_84_pac_sh _85_94_pac_sh _95p_pac_sh
 loc ages_hosp _75_84_sh _85_94_sh _95p_sh
@@ -24,8 +24,139 @@ loc ages_other _75_84_other_sh _85_94_other_sh _95p_other_sh
 loc sp_hosp _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_hosp' `ages_hosp'
 loc sp_other _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_other' `ages_other'
 loc sp_snf _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_snf' `ages_snf'
+
 *--------------------------------------------
-*1) rerun using the hospitals’ actual penalty rate
+*1) use Actual penalty * Medicare share
+*--------------------------------------------
+  loc comorbid_other black_other white_other dual_other metacancer_ct_other-hipfracture_ct_other
+  loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
+  *for now use hosp-comorbidities
+  loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
+  *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
+  loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
+  *omitted group = _65_74
+  loc ages_snf _75_84_pac_sh _85_94_pac_sh _95p_pac_sh
+  loc ages_hosp _75_84_sh _85_94_sh _95p_sh
+  loc ages_other _75_84_other_sh _85_94_other_sh _95p_other_sh
+loc sp_hosp _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_hosp' `ages_hosp'
+loc sp_other _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_other' `ages_other'
+loc sp_snf _Ify_* own_* urban teaching _Isize* `reform' lnnsnf_mkt_samehrr `comorbid_snf' `ages_snf'
+
+use ivpenalty_VI_agg3c_nosw, clear
+
+loc wgt [aw=dischnum1]
+
+loc int 2011
+loc pptype pbite_actual
+*pbite pbite_actual pnltr2013
+loc pnltprs1 `pptype'Xpost`int'
+
+loc file1 ols_`pptype'_pv
+loc file2 ols_`pptypes'_ci
+forval sn = 1/2 {
+  capture erase `reg'/`file`sn''.xls
+  capture erase `reg'/`file`sn''.txt
+}
+loc stat1 pv
+loc stat2 ci
+loc digit1 dec(3)
+loc digit2 dec(2)
+
+loc n 1
+
+foreach v of varlist shref shref_bytopSNF read30_pac read30_other {
+  replace `v' = `v'*100
+}
+
+forval sn = 1/2 {
+  *--------------------
+  loc yv shref_bytopSNF
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv vi_snf
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' if vi_snf2008==0 & bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv qual_read
+  *qual_samh qual_star qual_def
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+  *--------------------
+  foreach yv of varlist refhhi lnreqSNF_80pct {
+    *qual_samh qual_star qual_def
+    loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+    xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
+    *mean dep var
+    sum `yv' if e(sample)
+    loc mdv: display %9.3f `r(mean)'
+
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+  }
+  *--------------------
+  loc yv shref
+  *shrefAMI shrefHF shrefPN
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv comorbidsum
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv read30_pac
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv read30_other
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_other' vi_snf_l [aw=other_denom1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+}
+
+*--------------------------------------------
+*2) rerun using the hospitals’ actual penalty rate
 *--------------------------------------------
 use ivpenalty_VI_agg3c_nosw, clear
 
@@ -45,33 +176,30 @@ forval sn = 1/2 {
 }
 loc stat1 pv
 loc stat2 ci
+loc digit1 dec(3)
+loc digit2 dec(2)
 
 lab var read30 "30-day readmission rate"
 lab var read30_pac "30-day readmission rate after referred to SNFs"
-
 loc n 1
+
+foreach v of varlist shref shref_bytopSNF read30_pac read30_other {
+  replace `v' = `v'*100
+  sum `v'
+}
 
 *for different outcomes, use hospital- vs SNF-level specification
 forval sn = 1/2 {
-  foreach yv of varlist shref {
-    loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
-    xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
-    *mean dep var
-    sum `yv' if e(sample)
-    loc mdv: display %9.3f `r(mean)'
-
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
-  }
-
   *--------------------
-  loc yv comorbidsum
+  loc yv shref_bytopSNF
   loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
-  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
   *mean dep var
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
   loc yv vi_snf
@@ -81,10 +209,22 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
-  foreach yv of varlist refhhi qual_read {
+  loc yv qual_read
+  *qual_samh qual_star qual_def
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+  *--------------------
+  foreach yv of varlist refhhi lnreqSNF_80pct {
+    *qual_samh qual_star qual_def
     loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
     xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
 
@@ -92,10 +232,30 @@ forval sn = 1/2 {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
   }
   *--------------------
+  loc yv shref
+  *shrefAMI shrefHF shrefPN
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
 
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv comorbidsum
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
   loc yv read30_pac
   loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
   xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
@@ -103,7 +263,7 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
   loc yv read30_other
@@ -113,18 +273,18 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 }
 
 *--------------------------------------------
-*2) shorten the post-intervention period to one year after the HRRP program
+*3) shorten the post-intervention period to one year after the HRRP program
 *--------------------------------------------
 loc comorbid_other black_other white_other dual_other metacancer_ct_other-hipfracture_ct_other
 loc comorbid_hosp black white index_dual_rate metacancer_ct-hipfracture_ct
 *for now use hosp-comorbidities
 loc comorbid_snf black_pac white_pac snf_dual_rate metacancer_ct_snf-hipfracture_ct_snf
 *loc comorbid_snf snf_dual metacancer_ct_snf-hipfracture_ct_snf
-loc reform EHRstage1 EHRstage2 HACstatus bpci
+loc reform EHRstage1 EHRstage2 HACstatus bpci vbp_adjf
 *omitted group = _65_74
 loc ages_snf _75_84_pac_sh _85_94_pac_sh _95p_pac_sh
 loc ages_hosp _75_84_sh _85_94_sh _95p_sh
@@ -152,35 +312,26 @@ forval sn = 1/2 {
 }
 loc stat1 pv
 loc stat2 ci
+loc digit1 dec(3)
+loc digit2 dec(2)
 
 loc n 1
-
 
 foreach v of varlist shref shref_bytopSNF read30_pac read30_other {
   replace `v' = `v'*100
 }
 
 forval sn = 1/2 {
-  foreach yv of varlist shref {
-    *shrefAMI shrefHF shrefPN
-    loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
-    xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
-    *mean dep var
-    sum `yv' if e(sample)
-    loc mdv: display %9.3f `r(mean)'
-
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
-  }
-
   *--------------------
-  loc yv comorbidsum
+  loc yv shref_bytopSNF
   loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
-  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
   *mean dep var
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
   loc yv vi_snf
@@ -190,10 +341,21 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
-  foreach yv of varlist refhhi shref_bytopSNF lnreqSNF_80pct qual_read  {
+  loc yv qual_read
+  *qual_samh qual_star qual_def
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+  *--------------------
+  foreach yv of varlist refhhi lnreqSNF_80pct {
     *qual_samh qual_star qual_def
     loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
     xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
@@ -202,10 +364,30 @@ forval sn = 1/2 {
     sum `yv' if e(sample)
     loc mdv: display %9.3f `r(mean)'
 
-    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+    `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
   }
   *--------------------
+  loc yv shref
+  *shrefAMI shrefHF shrefPN
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l `wgt', cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
 
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
+  loc yv comorbidsum
+  loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
+  xtreg `yv' `pnltprs`n'' `sp_hosp' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
+  *mean dep var
+  sum `yv' if e(sample)
+  loc mdv: display %9.3f `r(mean)'
+
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
+
+  *--------------------
   loc yv read30_pac
   loc out "outreg2 using `reg'/`file`sn''.xls, append label `stat`sn''"
   xtreg `yv' `pnltprs`n'' `sp_snf' vi_snf_l if bad==0 [aw=dischnum_pac1], cluster(provid) fe
@@ -213,7 +395,7 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 
   *--------------------
   loc yv read30_other
@@ -223,7 +405,7 @@ forval sn = 1/2 {
   sum `yv' if e(sample)
   loc mdv: display %9.3f `r(mean)'
 
-  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
+  `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) `digit`sn'' fmt(fc)
 }
 
 *--------------------------------------------
@@ -256,6 +438,8 @@ forval sn = 1/2 {
 }
 loc stat1 pv
 loc stat2 ci
+loc digit1 dec(3)
+loc digit2 dec(2)
 
 *for different outcomes, use hospital- vs SNF-level specification
 forval sn = 1/1 {
