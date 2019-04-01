@@ -1,27 +1,31 @@
-# vertical-integration
-Research on the vertical integration between hospital and post-acute care (PAC)
+# Changes in hospital referral patterns to skilled nursing facilities under the Hospital Readmissions Reduction Program
+I describe the codes used to investigate the impact of the Hospital Readmissions Reduction Program (HRRP) vertical integration between hospital and post-acute care (PAC).
 
-## Use the CMS Hospital Cost Report data to obtain hospital characteristics
+Run the following codes chronologically.
 
-1. _Note_: For years 2010 and later, use the form 2552-10; for years before-2011 (2010-2011 data appear in both forms), use the form 2552-96.
-1. Figure out which variables you want from the Cost Reports and where they are. This [website](https://www.costreportdata.com/worksheet_formats.html) is useful to navigate which worksheet to refer to for specific variables (see 2010 format for years 2011-current, and 1996 format for previous years). Locate 1) worksheet, 2) line number, 3) column number that contain the variable of your interest.
+### Use CMS Hospital Cost Report data to obtain hospital characteristics
 
-2. Write SAS or Stata codes to extract data from those specific locations. The [NBER HCRIS data](http://www.nber.org/data/hcris.html) page provides template codes as well as raw data. My codes are adapted from those.
+Generally, to use the CMS Hospital Cost Report data, I recommend:
 
-We share my codes that achieve creating hospital-level panel data for 2011-2016 from the cost reports (as of 8/23/16, 2016 seems incomplete). They contain only the select variables of my interest. To run these codes,
+1. Figure out which variables you want from the Cost Reports and where they are.
+  - This [website](https://www.costreportdata.com/worksheet_formats.html) is useful to navigate which worksheet to refer to for specific variables
+  - Use the form `2552-10` for years 2010-current (2010-2011 data appear in both forms), and `2552-96` for previous years
+  - Locate 1) worksheet, 2) line number, 3) column number that contain the variable of your interest.
+2. Write SAS or Stata codes to extract data from those specific locations.
+  - The [NBER HCRIS data](http://www.nber.org/data/hcris.html) page provides template codes as well as raw data. My codes are adapted from those.
 
-1. Set the working directory to the cloned repository directory or wherever the following bash script file is.
-```
-cd vertical-integration/costreport_hosp
-```
-2. Run the following shell script that contains all the codes from downloading raw data to extracting relevant variables, and creating a final panel data file in the Stata format
+Specifically for this project, run the following shell script that contains all the codes from downloading raw data to extracting relevant variables and creating a final data file in the Stata format
 ```bash
+cd vertical-integration/costreport_hosp
 qsub hospcr.sh
 ```
-Note: Change the working directory inside individual code files.
+Note: You may have to change the working directory inside individual code files.
 
-## Setting up aggregate Medicare data
+
+### Construct aggregate hospital-level Medicare data
 We use hospital-month-condition level index admissions data and hospital-month-condition-PAC provider level referral data (where referrals are defined as starting PAC within 2 days from hospital discharge after matched).
+
+The final data constructed are hospital-level panel data for 2009-2016.
 
 1. `crindex_admit_chm.do`
   - create hospital-month-condition level index admissions data from the raw CSV file
@@ -55,7 +59,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
   - Create hospital-FY-condition-DRG level index admissions data
   - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
 
-## Programs to obtain and clean data for hospital participation in other pay for performance programs
+### Obtain data on hospital participation in other pay for performance programs
 1. `crhosp_bpci_participant.do`
   - use BPCI data files from the quarter 3 of each CY to create hospital-year level status of their participation in BPCI using files from https://innovation.cms.gov/initiatives/Bundled-Payments/Archived-Materials.html
 2. `crVBP.do`
@@ -65,8 +69,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 4. `crHAC.do`
   - create data for an indicator of being in the bottom quartile of the HAC score at the hospital-year level for FY = 2015-2016
 
-
-## Examine the impact of hospital readmissions penalty on hospital-PAC vertical integration
+### Main analysis
 2. `predict_pnltprs.do`
   - in each year t = 2011, predict the likelihood of penalty, penalty rate, penalty dollar amount in t+2 using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
 3. `crhosp_fy_VI.do`
@@ -84,7 +87,7 @@ We use hospital-month-condition level index admissions data and hospital-month-c
 1. `DiD_penalty_VI.Rmd`
   - create figures
 
-## Additional analyses done separately for each condition
+### Heterogeneity analysis 1: Condition-specific analysis
 1. `crhosp_fy_VI_cond.do`
 2. `anSNFquality_cond.do`
 3. `anpenalty_VI_cond.do`
