@@ -32,30 +32,30 @@ The final data constructed are hospital-level panel data for 2009-2016.
   - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
 2. `crindex_admit_chm_ddest.do`
   - create hospital-month-condition-discharge destination level index admissions data from the raw CSV file
-2. `crPACreferral_tchpm.do`
+3. `crPACreferral_tchpm.do`
   - Import hospital-month-condition-PAC provider level referral data separately for SNF
   - SNF data available for 2008/1 - 2016/6 except 2012/6 (just not avail.)
-1. `crindex_admit_comorbid_chm.do`
+4. `crindex_admit_comorbid_chm.do`
   - create index admission data for each condition-hospital-FY-comorbidity group
-3. `crSNFreferral_comorbid_chm.do`
+5. `crSNFreferral_comorbid_chm.do`
   - create SNF referral data for each condition-hospital-SNF-FY-comorbidity group
-1. `crindex_admit_dual_chy.do`
+6. `crindex_admit_dual_chy.do`
   - create # index admissions and SNF referrals that are dual-eligible for each condition-hospital-FY
-6. `hospcr.sh` in `costreport_hosp` directory
+7. `hospcr.sh` in `costreport_hosp` directory
   - Get hospital characteristics and total patient revenues for each FY from CMS Cost Report data
-7. `crhosp_chars_cr.do`
+8. `crhosp_chars_cr.do`
   - create hospital characteristics data from the HCRIS hospital cost report data for 2000-2015
-1. `crhosp_compare.do`
+9. `crhosp_compare.do`
   - Use hospital compare data to obtain risk-adjusted readmission rate for each hospital & national average during a 3-year window period (2008-2010)
-1. `crSNF_hrr_xwalk.do`
+10. `crSNF_hrr_xwalk.do`
   - get HRR & HSA for each SNF in the Medicare claims data
-1. `crsnf_deficiency.do`
+11. `crsnf_deficiency.do`
   - create SNF quality (deficiency counts) data from the SNF Compare archive database
-1. `crsnf_rating.do`
+12. `crsnf_rating.do`
   - create SNF quality (rating) data from the SNF Compare archive database
-1. `agebins.do`
+13. `agebins.do`
   - create index admission-level and SNF-level data on the # patients in each 5-age bin
-4. `crindex_admit_DRG_chm.do`
+14. `crindex_admit_DRG_chm.do`
   - Create hospital-FY-condition-DRG level index admissions data
   - available for 2008/1 -  2016/6 except 2012/6 (just not avail.)
 
@@ -70,21 +70,21 @@ The final data constructed are hospital-level panel data for 2009-2016.
   - create data for an indicator of being in the bottom quartile of the HAC score at the hospital-year level for FY = 2015-2016
 
 ### Main analysis
-2. `predict_pnltprs.do`
+1. `predict_pnltprs.do`
   - in each year t = 2011, predict the likelihood of penalty, penalty rate, penalty dollar amount in t+2 using the own performance (raw readmission rate, excess readmission rate) during {t-3,t-2,t-1}
-3. `crhosp_fy_VI.do`
+2. `crhosp_fy_VI.do`
   - Create hospital-FY level data containing total admission volume, PAC referral concentration, hospital characteristics
   - hospital characteristics from Hospital cost reports data
-2. `anSNFquality.do`
+3. `anSNFquality.do`
   - Do high-quality SNFs receive more referrals?
-3. `anpenalty_VI_agg3c.do`
-4. `tableformat.do`
+4. `anpenalty_VI_agg3c.do`
+5. `tableformat.do`
   - reshape coefficient estimate output into a formatted table
-1. `desc_trend_VI.do`
+6. `desc_trend_VI.do`
   - descriptive analysis of the trend of vertical integration over time
-1. `robustcheck.do`
+7. `robustcheck.do`
   - robustness check analysis
-1. `DiD_penalty_VI.Rmd`
+8. `DiD_penalty_VI.Rmd`
   - create figures
 
 ### Heterogeneity analysis 1: Condition-specific analysis
