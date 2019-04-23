@@ -1,7 +1,6 @@
 *create hospital-FY level data containing the VI measures, hospital characteristics
 
-loc dta /ifs/home/kimk13/VI/data
-
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data/"
 cd `dta'/Medicare
 
 *construct the referral HHI lumping all 3 conditions: AMI, HF, PN

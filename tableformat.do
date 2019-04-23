@@ -9,8 +9,8 @@ loc nn 1
 loc n2 =`nn'*1
 loc k 11
 
-loc fname pbite_actual
-*pbite pbite_noSNF pbite_actual actual sppshort
+loc fname pbite
+*spp pbite_noSNF pbite_actual actual sppshort
 
 use ivpenalty_VI_agg3c_nosw, clear
 
@@ -53,6 +53,7 @@ keep if _n==2
 keep v3-v`k2'
 destring *, replace ig("*")
 xpose, clear varname
+format v1 %9.2f
 tempfile coef
 save `coef'
 restore
@@ -71,11 +72,12 @@ keep v31-v`k2'2
 xpose, clear varname
 
 foreach v of varlist v1-v`nn' {
-  gen new`v' = string(`v')
+  *make decimal digits 2
+  gen new`v' = string(`v', "%9.2f")
   format new`v' %5s
   drop `v'
   rename new`v' `v'
-  replace `v' = "0.000" if `v'=="0"
+  replace `v' = "0.00" if `v'=="0"
   replace `v' = "0" + `v'  if substr(`v',1,1)=="."
   replace `v' = subinstr(`v',"-.","-0.",.)  if substr(`v',1,2)=="-."
 
@@ -161,16 +163,17 @@ drop v1-v2
 
 foreach v of varlist * {
   destring `v', ig("()") replace
-  format `v' %9.2f
+  format `v' %9.3f
 }
 xpose, clear varname
 
 foreach v of varlist v1-v`nn' {
-  gen new`v' = string(`v')
+  *make decimal digits 2
+  gen new`v' = string(`v', "%9.2f")
   format new`v' %5s
   drop `v'
   rename new`v' `v'
-  replace `v' = "0.000" if `v'=="0"
+  replace `v' = "0.00" if `v'=="0"
   replace `v' = "0" + `v'  if substr(`v',1,1)=="."
   replace `v' = subinstr(`v',"-.","-0.",.)  if substr(`v',1,2)=="-."
   rename `v' new`v'

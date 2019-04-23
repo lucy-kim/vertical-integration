@@ -8,7 +8,7 @@ ssc install moremata */
 
 loc gph "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
 loc reg "~/Dropbox/Research/sunita-lucy/Phoenix/VI/output"
-loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data"
+loc dta "~/Dropbox/Research/sunita-lucy/Phoenix/VI/data/"
 loc int 2011
 
 cd `dta'/Medicare
@@ -23,6 +23,7 @@ drop if fy==2008
 
 *drop small hospitals whose min # bed < 30
 bys provid: egen x = min(beds)
+tab fy if x > 25
 tab fy if x >= 30
 drop if x < 30
 drop x
@@ -39,25 +40,22 @@ drop x mdischnum
 
 bys fy: sum dischnum_pac
 
-
-*tag hospitals if the # referrals = 0 or 1 at any point in time - don't exclude them in the analysis of concentration measures
-capture drop x
-capture drop bad
-gen x = dischnum_pac < 2
-bys provid: egen bad = max(x)
-*tab fy if bad==1
-drop x
-
 *tag hospitals if the mean # referrals < 15 in the pre-HRRP
-capture drop mdischnum_pac
+capture drop mdischnum_pac x
 bys provid: egen x = mean(dischnum_pac) if fy < 2011
 bys provid: egen mdischnum_pac = max(x)
 *sum dischnum* refhhi if mdischnum_pac >= 10
 *tab fy if mdischnum_pac < 10
-replace bad = 1 if mdischnum_pac < 15
-*tab fy bad
+gen bad = mdischnum_pac < 15
+tab fy bad
 drop x mdischnum_pac
 
+*tag hospitals if the # referrals = 0 or 1 at any point in time - don't exclude them in the analysis of concentration measures
+gen x = dischnum_pac < 2
+bys provid: egen mx = max(x)
+replace bad = 1 if mx==1
+*tab fy if bad==1
+drop x mx
 
 *------------------------
 *create treatment X Post interaction terms
@@ -341,7 +339,7 @@ foreach v of varlist mcre_dischrg dischrg {
 tempfile cr
 save `cr'
 
-*use 2008 Medicare share to construct the penalty bite
+*use 2010 Medicare share to construct the penalty bite
 loc yr 2010
 keep if fy==`yr'
 gen mcre_dischrg`yr' = mcre_dischrg
@@ -439,6 +437,7 @@ loc n 1
 
 foreach v of varlist shref shref_bytopSNF read30_pac read30_other {
   replace `v' = `v'*100
+  sum `v'
 }
 
 *for different outcomes, use hospital- vs SNF-level specification
@@ -528,6 +527,22 @@ forval sn = 1/2 {
   `out' keep(`pnltprs`n'') addtext(Mean dep. var., `mdv', Hospital FE, Y, Year FE, Y, Hospital and SNF market characteristics, Y , Lagged SNF ownership, Y , Patient democratics and comorbidity, Y) dec(3) fmt(fc)
 }
 
+*-------------
+* mean and SD of each outcome
+use ivpenalty_VI_agg3c_nosw, clear
+
+foreach v of varlist shref shref_bytopSNF read30_pac read30_other {
+  replace `v' = `v'*100
+  sum `v'
+}
+loc yv vi_snf
+sum `yv' if vi_snf2008==0 & bad==0
+*--------------------
+loc yv shref_bytopSNF qual_read refhhi lnreqSNF_80pct comorbidsum read30_pac
+sum `yv' if bad==0
+*--------------------
+loc yv shref read30_other
+sum `yv'
 
 *-------------
 *for all the outcomes, when using the specification with interaction with year dummies, let's just plot the coefficients

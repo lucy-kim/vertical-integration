@@ -82,12 +82,23 @@ The final data constructed are hospital-level panel data for 2009-2016.
   - reshape coefficient estimate output into a formatted table
 6. `desc_trend_VI.do`
   - descriptive analysis of the trend of vertical integration over time
-7. `robustcheck.do`
-  - robustness check analysis
-8. `DiD_penalty_VI.Rmd`
-  - create figures
 
-### Heterogeneity analysis 1: Condition-specific analysis
+
+### Robustness check analysis
+1. `robustcheck.do`
+  - Initial robustness check analysis using alternative penalty pressure measures, shorter post-HRRP period (up to 2013), and a flexible form of difference-in-differences model using yearly indicators interacted with penalty pressure
+1. `DiD_penalty_VI.Rmd`
+  - create figures, including the difference-in-differences estimates on yearly indicators interacted with penalty pressure
+2. `supp_desc_analysis.do`
+  - % 3 condition discharges out of all discharges
+  - % discharges with hospital LOS < 3 days
+  - hospital's % SNF referrals for 3 conditions to SNFs in the same HRR (HSA) as the hospital
+3. `suppl_reg_analysis.do`
+  - unweighted estimation, re-estimate using expected penalty rates alone (without share of Medicare discharges)
+  - Sensitivity analysis when restricting to hospitals with at least 50 SNF referrals in every year
+  - All the heterogeneity analyses by hospital characteristics: hospital size, urban, teaching, BPCI participation status, SNF market size
+
+### Condition-specific analysis (part of heterogeneity analysis)
 1. `crhosp_fy_VI_cond.do`
 2. `anSNFquality_cond.do`
 3. `anpenalty_VI_cond.do`
