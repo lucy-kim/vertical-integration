@@ -198,48 +198,45 @@ pd <- position_dodge(0.3) # move them .05 to the left and right
 
 table(df$gp)
 
-df <- subset(df, gp!="read30_pac" & gp!="read30_other" & gp!="shrefAMI" & gp!="shrefHF" & gp!="shrefHK" & gp!="shrefPN")
+df <- subset(df, gp=="shref_bytopSNF" | gp=="vi_snf" | gp=="qual_read" | gp=="read30_pac")
 
-df$gp <- factor(df$gp, levels=c("shref","comorbidsum","vi_snf","refhhi3","shref_bytopSNF","reqSNF_80pct","qual_read"), labels = c("A. Discharges referred to SNF, %","B. Average comorbidity count per SNF referred patient","C. Probability of acquiring SNF","D. SNF referral HHI","E. Share of referrals to hospital's most referred SNF, %","F. Number of SNFs accounting for 80% of referrals","G. Average SNF performance at baseline"))
-# "Share of AMI discharges referred to SNF","Share of HF discharges referred to SNF","Share of PN discharges referred to SNF","Share of HK discharges referred to SNF"
+# multiply the readmission rate by 100 to make percentage
+df$mean <- ifelse(df$gp=="read30_pac", 100*df$mean, df$mean)
+df2 <- subset(df, gp=="read30_pac")
+summary(df2)
+
+df$gp <- factor(df$gp, levels=c("shref_bytopSNF","vi_snf","qual_read","read30_pac"), labels = c("Share of referrals to hospital's most referred SNF, %","Probability of acquiring SNF","Average SNF quality index","30-day readmission among patients referred to SNFs, %"))
 
 df$year <- df$fy
 df$high <- factor(df$high, levels = c(1,0), labels=c("Top quartile (High)", "Bottom quartile (Low)"))
 
 # set manual scales using geom_blank: https://stackoverflow.com/questions/18046051/setting-individual-axis-limits-with-facet-wrap-and-scales-free-in-ggplot2
-range0 <- range(15,25)
-range1 <- range(0,0.25)
-range2 <- range(0,0.05)
-range3 <- range(0.2,0.3)
-range4 <- range(30,40)
-range5 <- range(6,8)
-range6 <- range(-0.2,0.03)
 yrrange <- range(2009,2016)
 
-dummy1 <- data.frame(year = yrrange, mean=range0,
-                     gp = "A. Discharges referred to SNF, %", stringsAsFactors=TRUE)
-dummy2 <- data.frame(year = yrrange, mean=range1,
-                     gp = "B. Average comorbidity count per SNF referred patient", stringsAsFactors=TRUE)
-dummy3 <- data.frame(year = yrrange, mean=range2,
-                     gp = "C. Probability of acquiring SNF", stringsAsFactors=TRUE)
-dummy4 <- data.frame(year = yrrange, mean=range3,
-                     gp = "D. SNF referral HHI", stringsAsFactors=TRUE)
-dummy5 <- data.frame(year = yrrange, mean=range4,
-                     gp = "E. Share of referrals to hospital's most referred SNF, %", stringsAsFactors=TRUE)
-dummy6 <- data.frame(year = yrrange, mean=range5,
-                     gp = "F. Number of SNFs accounting for 80% of referrals", stringsAsFactors=TRUE)
-dummy7 <- data.frame(year = yrrange, mean=range6,
-                     gp = "G. Average SNF performance at baseline", stringsAsFactors=TRUE)
-dummies <- rbind(dummy1,dummy2, dummy3, dummy4, dummy5, dummy6, dummy7)
+range1 <- range(30,40)
+range2 <- range(0,0.05)
+range3 <- range(-0.2,0.03)
+range4 <- range(15,35)
+
+dummy1 <- data.frame(year = yrrange, mean=range1,
+                     gp = "Share of referrals to hospital's most referred SNF, %", stringsAsFactors=TRUE)
+dummy2 <- data.frame(year = yrrange, mean=range2,
+                     gp = "Probability of acquiring SNF", stringsAsFactors=TRUE)
+dummy3 <- data.frame(year = yrrange, mean=range3,
+                     gp = "Average SNF quality index", stringsAsFactors=TRUE)
+dummy4 <- data.frame(year = yrrange, mean=range4,
+                     gp = "30-day readmission among patients referred to SNFs, %", stringsAsFactors=TRUE)
+
+dummies <- rbind(dummy1,dummy2, dummy3, dummy4)
 
 # all outcomes in one graph
 ggplot(df, aes(x=year, y = mean)) + 
-  facet_wrap(~gp, ncol=2, scale="free") +
+  facet_wrap(~gp, ncol=1, scale="free") +
   geom_point(aes( shape=high, linetype=high), size=2) +
   geom_line(aes(shape=high, linetype=high)) +
   geom_blank(data=dummies) +
   scale_x_continuous(breaks = seq(2009,2016,1)) +
-  theme_bw(base_size=15) +
+  theme_bw(base_size=12) +
   geom_vline(aes(xintercept=2011), colour="black", alpha=0.5, linetype="dashed") +
   labs(x="Year ending in June",
        y="Mean") +
@@ -249,7 +246,7 @@ ggplot(df, aes(x=year, y = mean)) +
   guides(linetype=guide_legend(title="Penalty pressure"),
          shape=guide_legend(title="Penalty pressure")) +
   scale_shape_manual(values = c(17,1)) 
-ggsave("~/Dropbox/Research/VI/output/desc_alloutc.pdf", width = 25, height=25, units="cm")
+ggsave("~/Dropbox/Research/VI/output/desc_alloutc2.pdf", width = 13.5, height=18, units="cm")
 ```
 
 ## For presentation slides, each outcome separately 
